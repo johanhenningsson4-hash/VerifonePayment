@@ -175,6 +175,31 @@ Available events:
 
 The included `VerifonePayment.Test` project provides a comprehensive example with an interactive menu for testing all library features.
 
+### Windows Forms Test Application
+
+The `VerifonePayment.WinFormsTest` project offers a modern GUI interface for testing payment operations:
+
+- **Professional Interface**: Clean, organized layout with numbered operation buttons
+- **Real-time Event Monitoring**: Live display of all payment events with timestamps
+- **Interactive Controls**: GUI controls for configuration and payment amounts
+- **Visual Workflow**: Button states guide users through the payment process
+- **Error Handling**: User-friendly error messages and comprehensive logging
+
+**Key Features:**
+- Async operations prevent UI freezing
+- Automatic button state management based on operation flow
+- Built-in configuration validation
+- Invoice ID generation
+- Clear event log with detailed information
+
+To run the Windows Forms test:
+```bash
+cd VerifonePayment.WinFormsTest\bin\Debug
+VerifonePayment.WinFormsTest.exe
+```
+
+See [WinForms Test README](VerifonePayment.WinFormsTest/README.md) for detailed usage instructions.
+
 ## Dependencies
 
 - **.NET Framework 4.7.2+** - Target framework
@@ -205,13 +230,24 @@ The included `VerifonePayment.Test` project provides a comprehensive example wit
    ```
 
 3. **Running Tests**:
-   ```bash
-   # Build and run the test console application
-   cd VerifonePayment.Test
-   dotnet run
-   ```
+```bash
+# Console Test Application
+cd VerifonePayment.Test
+dotnet run
+   
+# Windows Forms Test Application
+cd VerifonePayment.WinFormsTest\bin\Debug
+VerifonePayment.WinFormsTest.exe
+```
 
 ## Changelog
+
+### [1.0.2] - 2026-02-09
+- **New**: Added comprehensive Windows Forms test application (`VerifonePayment.WinFormsTest`)
+- **Enhanced**: Professional GUI interface with real-time event monitoring
+- **Improved**: Visual workflow guidance with numbered operation buttons
+- **Added**: Async operation support for non-blocking UI experience
+- **Enhanced**: Interactive configuration management and validation tools
 
 ### [1.0.1] - 2026-02-09
 - **Fixed**: Added missing System.Configuration assembly reference to project file
