@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using VerifonePayment.Lib.Configuration;
 using VerifonePayment.Lib.Models;
 using VerifoneSdk;
 using static VerifonePayment.Lib.Enums;
@@ -49,6 +50,10 @@ namespace VerifonePayment.Lib
         /// Listener.
         /// </summary>
         private readonly VerifonePaymentListener listener_ = new VerifonePaymentListener();
+        /// <summary>
+        /// Configuration settings.
+        /// </summary>
+        private readonly PaymentConfiguration configuration_;
 
         #endregion
 
@@ -127,18 +132,39 @@ namespace VerifonePayment.Lib
         /// Delete log file.
         /// </summary>
         public bool DeleteLogFile { get; set; } = false;
+        /// <summary>
+        /// Configuration settings.
+        /// </summary>
+        public PaymentConfiguration Configuration => configuration_;
 
         #endregion
 
         #region "Constructor"
 
+        /// <summary>
+        /// Initializes a new instance using configuration from app.config
+        /// </summary>
+        public VerifonePayment()
+        {
+            configuration_ = new PaymentConfiguration();
+            
+            if (!configuration_.IsValid())
+                throw new InvalidOperationException("Invalid payment configuration. Please check your app.config settings.");
+                
+            InitializeFromConfiguration();
+        }
+
+        /// <summary>
+        /// Initializes a new instance with specific IP address (overrides configuration)
+        /// </summary>
+        /// <param name="ipAddress">Device IP address</param>
         public VerifonePayment(string ipAddress)
         {
             if (string.IsNullOrEmpty(ipAddress))
                 throw new ArgumentException(_TextIpAddressEmpty, nameof(ipAddress));
 
-            IpAddress = ipAddress;
-            ConfigureLogFile();
+            configuration_ = new PaymentConfiguration(ipAddress);
+            InitializeFromConfiguration();
         }
 
         #endregion
@@ -146,19 +172,31 @@ namespace VerifonePayment.Lib
         #region "Private Methods"
 
         /// <summary>
+        /// Initialize properties from configuration.
+        /// </summary>
+        private void InitializeFromConfiguration()
+        {
+            IpAddress = configuration_.DeviceIpAddress;
+            DeleteLogFile = configuration_.DeleteLogFile;
+            ConfigureLogFile();
+        }
+
+        /// <summary>
         /// Configure log file.
         /// </summary>
         private void ConfigureLogFile()
         {
-            // If 'LogFile' not present then set it to default log file
+            // Use configured log file path or default to temp directory
             if (string.IsNullOrEmpty(LogFile))
             {
-                var logFile = Path.Combine(Path.GetTempPath(), _defaultLogFile);
+                var logFileName = !string.IsNullOrEmpty(configuration_.LogFilePath) 
+                    ? configuration_.LogFilePath 
+                    : Path.Combine(Path.GetTempPath(), _defaultLogFile);
 
-                if (DeleteLogFile && File.Exists(logFile))
-                    File.Delete(logFile);
+                if (DeleteLogFile && File.Exists(logFileName))
+                    File.Delete(logFileName);
 
-                LogFile = Path.Combine(Path.GetTempPath(), _defaultLogFile);
+                LogFile = logFileName;
             }
 
             PaymentSdk.ConfigureLogFile(LogFile, 2048);
@@ -175,8 +213,8 @@ namespace VerifonePayment.Lib
         {
             var dict = new Dictionary<string, string>
             {
-                { _DEVICE_ADDRESS_KEY, IpAddress },
-                { _DEVICE_CONNECTION_TYPE_KEY, _DEVICE_CONNECTION_TYPE_KEY_VALUE }
+                { _DEVICE_ADDRESS_KEY, configuration_.DeviceIpAddress },
+                { _DEVICE_CONNECTION_TYPE_KEY, configuration_.DeviceConnectionType }
             };
 
             payment_sdk_.InitializeFromValues(listener_, dict);
@@ -190,9 +228,35 @@ namespace VerifonePayment.Lib
         {
             var credentials = LoginCredentials.Create();
 
-            credentials.UserId = "username";
-            credentials.Password = "password";
-            credentials.ShiftNumber = "shift";
+            credentials.UserId = configuration_.DefaultUsername;
+            credentials.Password = configuration_.DefaultPassword;
+            credentials.ShiftNumber = configuration_.DefaultShiftNumber;
+
+            var status = payment_sdk_.TransactionManager.LoginWithCredentials(credentials);
+
+            return status.StatusCode == 0;
+        }
+
+        /// <summary>
+        /// Login with custom credentials (overrides configuration).
+        /// </summary>
+        /// <param name="username">Username for login</param>
+        /// <param name="password">Password for login</param>
+        /// <param name="shiftNumber">Shift number for login</param>
+        /// <returns>The status of login.</returns>
+        public bool LoginWithCredentials(string username, string password, string shiftNumber)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+                throw new ArgumentException("Username cannot be null or empty", nameof(username));
+            if (string.IsNullOrWhiteSpace(password))
+                throw new ArgumentException("Password cannot be null or empty", nameof(password));
+            if (string.IsNullOrWhiteSpace(shiftNumber))
+                throw new ArgumentException("Shift number cannot be null or empty", nameof(shiftNumber));
+
+            var credentials = LoginCredentials.Create();
+            credentials.UserId = username;
+            credentials.Password = password;
+            credentials.ShiftNumber = shiftNumber;
 
             var status = payment_sdk_.TransactionManager.LoginWithCredentials(credentials);
 
@@ -296,6 +360,24 @@ namespace VerifonePayment.Lib
         public void TearDown()
         {
             payment_sdk_.TearDown();
+        }
+
+        /// <summary>
+        /// Gets the current configuration summary.
+        /// </summary>
+        /// <returns>Configuration summary string</returns>
+        public string GetConfigurationSummary()
+        {
+            return configuration_.GetConfigurationSummary();
+        }
+
+        /// <summary>
+        /// Validates the current configuration.
+        /// </summary>
+        /// <returns>True if configuration is valid</returns>
+        public bool ValidateConfiguration()
+        {
+            return configuration_.IsValid();
         }
 
         #endregion

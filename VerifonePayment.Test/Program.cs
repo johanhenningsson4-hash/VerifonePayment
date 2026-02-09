@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Configuration;
 using System.Threading;
 
 namespace VerifonePayment.Test
@@ -19,7 +20,12 @@ namespace VerifonePayment.Test
         {
             try
             {
-                var verifonePayment = new Lib.VerifonePayment("192.168.40.173");
+                // Use configuration from app.config by default
+                var verifonePayment = new Lib.VerifonePayment();
+                
+                Console.WriteLine("=== Verifone Payment Test Application ===");
+                Console.WriteLine($"Configuration: {verifonePayment.Configuration.GetConfigurationSummary()}");
+                Console.WriteLine();
 
                 // Subscribe to the event
                 verifonePayment.StatusEventOccurred += VerifonePayment_StatusEventOccurred;

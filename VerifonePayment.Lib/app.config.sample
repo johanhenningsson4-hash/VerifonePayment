@@ -1,25 +1,28 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <configuration>
-    <startup> 
-        <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.8" />
-    </startup>
-    
     <appSettings>
         <!-- Verifone Device Configuration -->
-        <add key="DeviceIpAddress" value="192.168.0.36" />
+        <!-- IP address of the Verifone payment device -->
+        <add key="DeviceIpAddress" value="127.0.0.1" />
+        <!-- Connection type - typically 'tcpip' for network connections -->
         <add key="DeviceConnectionType" value="tcpip" />
         
         <!-- Authentication Configuration -->
+        <!-- Default credentials for device login -->
         <add key="DefaultUsername" value="username" />
         <add key="DefaultPassword" value="password" />
         <add key="DefaultShiftNumber" value="shift" />
         
         <!-- Logging Configuration -->
+        <!-- Custom log file path (leave empty to use temp directory) -->
         <add key="LogFilePath" value="" />
+        <!-- Whether to delete existing log file on startup -->
         <add key="DeleteLogFile" value="false" />
         
         <!-- Timeout Configuration (in seconds) -->
+        <!-- Connection timeout for device communication -->
         <add key="ConnectionTimeoutSeconds" value="30" />
+        <!-- Transaction timeout for payment operations -->
         <add key="TransactionTimeoutSeconds" value="60" />
     </appSettings>
 </configuration>
