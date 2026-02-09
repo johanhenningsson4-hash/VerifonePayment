@@ -1,0 +1,291 @@
+name: VerifonePayment CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+env:
+  SOLUTION_FILE: VerifonePayment.sln
+  BUILD_CONFIGURATION: Release
+  DOTNET_FRAMEWORK_VERSION: '4.7.2'
+  ARTIFACT_NAME: VerifonePayment-Build
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: windows-2022
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build-time: ${{ steps.build-time.outputs.duration }}
+      
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET Framework Build Tools
+      uses: microsoft/setup-msbuild@v2
+      with:
+        vs-version: '17.0'
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+      with:
+        nuget-version: 'latest'
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.nuget/packages
+          ${{ github.workspace }}/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.config', '**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Extract Version Information
+      id: version
+      run: |
+        $version = "1.0.0"
+        if ($env:GITHUB_REF -match "refs/tags/v(.+)") {
+          $version = $matches[1]
+        } elseif ($env:GITHUB_REF -eq "refs/heads/main") {
+          $version = "1.0.${{ github.run_number }}"
+        } else {
+          $version = "1.0.${{ github.run_number }}-preview"
+        }
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        Write-Host "Version: $version"
+      shell: powershell
+
+    - name: Restore NuGet Packages
+      run: |
+        if (Test-Path "${{ env.SOLUTION_FILE }}") {
+          nuget restore "${{ env.SOLUTION_FILE }}"
+        } else {
+          Write-Host "Solution file not found, restoring individual projects"
+          Get-ChildItem -Recurse -Include "*.csproj" | ForEach-Object {
+            nuget restore $_.FullName
+          }
+        }
+      shell: powershell
+
+    - name: Build Solution
+      id: build-time
+      run: |
+        $startTime = Get-Date
+        
+        if (Test-Path "${{ env.SOLUTION_FILE }}") {
+          msbuild "${{ env.SOLUTION_FILE }}" `
+            /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
+            /p:Platform="Any CPU" `
+            /p:TargetFrameworkVersion=v${{ env.DOTNET_FRAMEWORK_VERSION }} `
+            /p:AssemblyVersion=${{ steps.version.outputs.version }} `
+            /p:FileVersion=${{ steps.version.outputs.version }} `
+            /verbosity:minimal `
+            /maxcpucount
+        } else {
+          # Build individual projects if solution file doesn't exist
+          Get-ChildItem -Recurse -Include "*.csproj" | ForEach-Object {
+            Write-Host "Building: $($_.Name)"
+            msbuild $_.FullName `
+              /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
+              /p:Platform="Any CPU" `
+              /p:TargetFrameworkVersion=v${{ env.DOTNET_FRAMEWORK_VERSION }} `
+              /verbosity:minimal
+          }
+        }
+        
+        if ($LASTEXITCODE -ne 0) {
+          throw "Build failed with exit code $LASTEXITCODE"
+        }
+        
+        $endTime = Get-Date
+        $duration = ($endTime - $startTime).TotalSeconds
+        echo "duration=$duration" >> $env:GITHUB_OUTPUT
+        Write-Host "Build completed in $duration seconds"
+      shell: powershell
+
+    - name: Run Tests with Custom Script
+      run: |
+        if (Test-Path "scripts\test.ps1") {
+          Write-Host "Running tests with custom test script..."
+          .\scripts\test.ps1 -Configuration ${{ env.BUILD_CONFIGURATION }} -TestCategory Unit
+        } else {
+          Write-Host "No custom test script found, running basic tests..."
+          $testAssemblies = Get-ChildItem -Path . -Recurse -Include "*Test*.dll", "*Tests*.dll" | 
+                           Where-Object { 
+                               $_.Directory.Name -eq "bin" -and 
+                               $_.Directory.Parent.Name -eq "${{ env.BUILD_CONFIGURATION }}"
+                           }
+          
+          if ($testAssemblies.Count -gt 0) {
+            New-Item -ItemType Directory -Force -Path "TestResults" | Out-Null
+            
+            foreach ($assembly in $testAssemblies) {
+              Write-Host "Testing: $($assembly.Name)"
+              $testName = [System.IO.Path]::GetFileNameWithoutExtension($assembly.Name)
+              
+              # Try to find VSTest
+              $vstestPaths = @(
+                "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\TestPlatform\vstest.console.exe",
+                "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\Common7\IDE\Extensions\TestPlatform\vstest.console.exe",
+                "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\TestPlatform\vstest.console.exe"
+              )
+              
+              $vstest = $vstestPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+              
+              if ($vstest) {
+                & $vstest $assembly.FullName `
+                  /Logger:trx `
+                  /ResultsDirectory:TestResults `
+                  /Framework:.NETFramework,Version=v4.7.2 `
+                  /Platform:x64
+              } else {
+                Write-Host "VSTest not found, skipping test execution"
+              }
+            }
+          } else {
+            Write-Host "No test assemblies found"
+          }
+        }
+      shell: powershell
+      continue-on-error: true
+
+    - name: Publish Test Results
+      uses: dorny/test-reporter@v1
+      if: success() || failure()
+      with:
+        name: Test Results
+        path: 'TestResults/*.trx'
+        reporter: dotnet-trx
+        fail-on-error: false
+
+    - name: Create Build Artifacts
+      run: |
+        New-Item -ItemType Directory -Force -Path "artifacts"
+        
+        # Copy library outputs
+        $libPath = "VerifonePayment.Lib\bin\${{ env.BUILD_CONFIGURATION }}"
+        if (Test-Path $libPath) {
+          Write-Host "Copying library artifacts from: $libPath"
+          Copy-Item "$libPath\*" "artifacts\" -Recurse -Force
+        }
+        
+        # Copy test application if exists
+        $testPath = "VerifonePayment.WinFormsTest\bin\${{ env.BUILD_CONFIGURATION }}"
+        if (Test-Path $testPath) {
+          Write-Host "Copying test application from: $testPath"
+          New-Item -ItemType Directory -Force -Path "artifacts\TestApplication"
+          Copy-Item "$testPath\*" "artifacts\TestApplication\" -Recurse -Force
+        }
+        
+        # Create version info
+        @{
+          Version = "${{ steps.version.outputs.version }}"
+          BuildNumber = "${{ github.run_number }}"
+          Commit = "${{ github.sha }}"
+          Branch = "${{ github.ref_name }}"
+          BuildDate = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss UTC")
+          TargetFramework = "NET${{ env.DOTNET_FRAMEWORK_VERSION }}"
+        } | ConvertTo-Json | Out-File "artifacts\version.json"
+        
+        Write-Host "Artifacts created successfully:"
+        Get-ChildItem "artifacts" -Recurse | Select-Object Name, Length, LastWriteTime
+      shell: powershell
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.ARTIFACT_NAME }}-${{ steps.version.outputs.version }}
+        path: artifacts/
+        retention-days: 90
+
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: windows-2022
+    needs: build-and-test
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+
+    - name: Restore Packages
+      run: |
+        if (Test-Path "${{ env.SOLUTION_FILE }}") {
+          nuget restore "${{ env.SOLUTION_FILE }}"
+        }
+      shell: powershell
+
+    - name: Run Static Code Analysis
+      run: |
+        if (Test-Path "${{ env.SOLUTION_FILE }}") {
+          msbuild "${{ env.SOLUTION_FILE }}" `
+            /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
+            /p:RunAnalyzersDuringBuild=true `
+            /p:TreatWarningsAsErrors=false `
+            /verbosity:normal
+        }
+      continue-on-error: true
+      shell: powershell
+
+    - name: Security Vulnerability Scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Security Scan Results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  notification:
+    name: Build Notification
+    runs-on: ubuntu-latest
+    needs: [build-and-test, code-quality]
+    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request')
+    
+    steps:
+    - name: Determine Status
+      id: status
+      run: |
+        if [ "${{ needs.build-and-test.result }}" == "success" ] && [ "${{ needs.code-quality.result }}" == "success" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "message=? Build and quality checks completed successfully!" >> $GITHUB_OUTPUT
+        elif [ "${{ needs.build-and-test.result }}" == "failure" ]; then
+          echo "status=failure" >> $GITHUB_OUTPUT  
+          echo "message=? Build failed!" >> $GITHUB_OUTPUT
+        elif [ "${{ needs.code-quality.result }}" == "failure" ]; then
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "message=?? Build succeeded but code quality checks failed!" >> $GITHUB_OUTPUT
+        else
+          echo "status=unknown" >> $GITHUB_OUTPUT
+          echo "message=? Build status unclear" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Report Status
+      run: |
+        echo "${{ steps.status.outputs.message }}"
+        if [ "${{ steps.status.outputs.status }}" == "failure" ]; then
+          exit 1
+        fi
