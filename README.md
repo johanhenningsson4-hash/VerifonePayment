@@ -208,7 +208,14 @@ See [WinForms Test README](VerifonePayment.WinFormsTest/README.md) for detailed 
 
 ## Recent Updates
 
-### Version 1.0.1
+### Version 1.0.3 - Stability & Monitoring Enhancements
+- **?? Critical Fix**: Resolved ObjectDisposedException during form disposal
+- **?? Enhanced Monitoring**: Comprehensive debug logging and performance tracking
+- **??? Thread Safety**: Improved cross-thread operation handling
+- **?? Diagnostics**: Real-time memory, thread, and resource monitoring
+- **? Stability**: Enhanced form lifecycle management and cleanup
+
+### Version 1.0.2
 - **Fixed Configuration Management**: Added proper reference to `System.Configuration` assembly for .NET Framework projects
 - **Enhanced Error Handling**: Improved configuration validation and error messages
 - **Project Structure**: Cleaned up project file references and dependencies
@@ -241,6 +248,24 @@ VerifonePayment.WinFormsTest.exe
 ```
 
 ## Changelog
+
+### [1.0.3] - 2026-02-09
+- **?? Critical Fix**: Resolved race condition causing `ObjectDisposedException` during application shutdown
+- **?? Enhanced Monitoring**: Added comprehensive debug logging with thread-aware diagnostics
+- **??? Thread Safety**: Improved cross-thread operation handling in event handlers
+- **?? Performance Monitoring**: Real-time memory usage, thread count, and resource tracking
+- **? Form Lifecycle**: Enhanced disposal process with proper event unsubscription
+- **?? Stability**: Added global exception handling and detailed error context
+- **?? Debug Output**: Structured logging with caller information and form state tracking
+- **?? Resource Management**: Automatic cleanup of ManualResetEvents and monitoring timers
+
+**Key Technical Improvements:**
+- Event unsubscription before SDK teardown prevents disposal exceptions
+- Enhanced LogMessage with ObjectDisposedException handling
+- Performance monitoring timer with 10-second interval metrics
+- Form state tracking (Normal, Disposing, Disposed, Cross-thread)
+- Thread-aware logging with background/main thread identification
+- Global exception handlers in Program.cs for unhandled exceptions
 
 ### [1.0.2] - 2026-02-09
 - **New**: Added comprehensive Windows Forms test application (`VerifonePayment.WinFormsTest`)
@@ -289,6 +314,23 @@ Enable detailed logging by setting a custom log file path:
 ```xml
 <add key="LogFilePath" value="C:\Logs\verifone.log" />
 ```
+
+**Enhanced Debug Output (v1.0.3+)**:
+The WinForms application now includes comprehensive monitoring in the Visual Studio Debug Output window:
+
+```
+[14:32:15.123] [T1M] [InitializePaymentSystem:45] [NORMAL] OPERATION InitializePaymentSystem - START
+[14:32:15.134] [T1M] [LogEventSubscription:67] [NORMAL] EVENT_SUBSCRIBE StatusEventOccurred [Instance: 1]
+[14:32:15.145] [T3B] [VerifonePayment_StatusEventOccurred:234] [CROSS_THREAD] StatusEvent received: 0, STATUS_TEARDOWN
+[14:32:15.156] [T1M] [LogFormLifecycle:89] [DISPOSING] FORM_LIFECYCLE FORM_CLOSING_START [Instance: 1, Uptime: 12456ms]
+```
+
+**Debug Output Features:**
+- ?? **Performance Metrics**: Memory usage, thread count, GC statistics
+- ?? **Thread Tracking**: Main vs background thread identification  
+- ?? **Event Flow**: Complete event subscription/unsubscription lifecycle
+- ?? **Form State**: Real-time form disposal and lifecycle tracking
+- ? **Cross-thread Safety**: Detailed invoke operation monitoring
 
 ## Contributing
 

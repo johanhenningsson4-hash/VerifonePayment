@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows.Forms;
 using VerifonePayment.Lib;
@@ -20,14 +22,28 @@ namespace VerifonePayment.WinFormsTest
         private ManualResetEvent _basketEventStatusEventReceived = new ManualResetEvent(false);
         private ManualResetEvent _paymentCompletedEventReceived = new ManualResetEvent(false);
         
+        // Stability monitoring
+        private readonly object _logLock = new object();
+        private bool _isDisposing = false;
+        private static int _instanceCounter = 0;
+        private readonly int _instanceId;
+        private readonly Stopwatch _formLifetime = Stopwatch.StartNew();
+        private System.Windows.Forms.Timer _monitoringTimer;
+        
         #endregion
         
         #region "Constructor"
         
         public MainForm()
         {
+            _instanceId = Interlocked.Increment(ref _instanceCounter);
+            LogDebug($"MainForm constructor starting [Instance: {_instanceId}]");
+            
             InitializeComponent();
             InitializePaymentSystem();
+            EnablePerformanceMonitoring();
+            
+            LogDebug($"MainForm constructor completed [Instance: {_instanceId}]");
         }
         
         #endregion
@@ -36,17 +52,31 @@ namespace VerifonePayment.WinFormsTest
         
         private void InitializePaymentSystem()
         {
+            LogOperation("InitializePaymentSystem");
             try
             {
                 _verifonePayment = new VerifonePayment.Lib.VerifonePayment();
                 
-                // Subscribe to events
+                // Subscribe to events with logging
+                LogEventSubscription("StatusEventOccurred", "SUBSCRIBE");
                 _verifonePayment.StatusEventOccurred += VerifonePayment_StatusEventOccurred;
+                
+                LogEventSubscription("TransactionEventOccurred", "SUBSCRIBE");
                 _verifonePayment.TransactionEventOccurred += VerifonePayment_TransactionEventOccurred;
+                
+                LogEventSubscription("DeviceVitalsInformationEventOccurred", "SUBSCRIBE");
                 _verifonePayment.DeviceVitalsInformationEventOccurred += VerifonePayment_DeviceVitalsInformationEventOccurred;
+                
+                LogEventSubscription("BasketEventOccurred", "SUBSCRIBE");
                 _verifonePayment.BasketEventOccurred += VerifonePayment_BasketEventOccurred;
+                
+                LogEventSubscription("NotificationEventOccurred", "SUBSCRIBE");
                 _verifonePayment.NotificationEventOccurred += VerifonePayment_NotificationEventOccurred;
+                
+                LogEventSubscription("PaymentCompletedEventOccurred", "SUBSCRIBE");
                 _verifonePayment.PaymentCompletedEventOccurred += VerifonePayment_PaymentCompletedEventOccurred;
+                
+                LogEventSubscription("CommerceEventOccurred", "SUBSCRIBE");
                 _verifonePayment.CommerceEventOccurred += VerifonePayment_CommerceEventOccurred;
                 
                 // Display configuration
@@ -57,9 +87,12 @@ namespace VerifonePayment.WinFormsTest
                 // Enable initial buttons
                 _btnCommunicate.Enabled = true;
                 _btnValidateConfig.Enabled = true;
+                
+                LogOperation("InitializePaymentSystem", "SUCCESS");
             }
             catch (Exception ex)
             {
+                LogOperation("InitializePaymentSystem", "ERROR", ex);
                 LogError($"Initialization failed: {ex.Message}");
                 MessageBox.Show($"Failed to initialize payment system: {ex.Message}", "Initialization Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -231,28 +264,50 @@ namespace VerifonePayment.WinFormsTest
         
         private void VerifonePayment_StatusEventOccurred(object sender, PaymentEventArgs e)
         {
-            LogEvent("Status", e);
-            _statusEventReceived.Set();
+            LogDebug($"StatusEvent received: {e.Status}, {e.Type}, {e.Message}");
+            try
+            {
+                LogEvent("Status", e);
+                _statusEventReceived.Set();
+                LogDebug("StatusEvent processed successfully");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"StatusEvent processing failed: {ex.Message}");
+                throw;
+            }
         }
         
         private void VerifonePayment_TransactionEventOccurred(object sender, PaymentEventArgs e)
         {
-            LogEvent("Transaction", e);
-            
-            if (e.Type == Lib.Enums.EventType.SESSION_STARTED && e.Status == "0")
+            LogDebug($"TransactionEvent received: {e.Status}, {e.Type}, {e.Message}");
+            try
             {
-                _startSessionStatusEventReceived.Set();
-            }
-            if (e.Type == Lib.Enums.EventType.SESSION_ENDED && e.Status == "0")
-            {
-                _statusEventReceived.Set();
-            }
-            if (e.Type == Lib.Enums.EventType.LOGIN_COMPLETED)
-            {
-                _loginEventReceived.Set();
+                LogEvent("Transaction", e);
                 
-                if (e.Status == "-20")
+                if (e.Type == Lib.Enums.EventType.SESSION_STARTED && e.Status == "0")
+                {
+                    _startSessionStatusEventReceived.Set();
+                    LogDebug("SESSION_STARTED event signaled");
+                }
+                if (e.Type == Lib.Enums.EventType.SESSION_ENDED && e.Status == "0")
+                {
                     _statusEventReceived.Set();
+                    LogDebug("SESSION_ENDED event signaled");
+                }
+                if (e.Type == Lib.Enums.EventType.LOGIN_COMPLETED)
+                {
+                    _loginEventReceived.Set();
+                    LogDebug("LOGIN_COMPLETED event signaled");
+                    
+                    if (e.Status == "-20")
+                        _statusEventReceived.Set();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"TransactionEvent processing failed: {ex.Message}");
+                throw;
             }
         }
         
@@ -328,16 +383,59 @@ namespace VerifonePayment.WinFormsTest
         
         private void LogMessage(string message)
         {
+            var invokeAttempted = false;
+            
             if (this.InvokeRequired)
             {
-                this.Invoke((Action)(() => LogMessage(message)));
+                invokeAttempted = true;
+                LogDebug($"LogMessage invoke required for: {message.Substring(0, Math.Min(50, message.Length))}...");
+                
+                try
+                {
+                    // Check if form is disposing before attempting to invoke
+                    if (!this.IsDisposed && !this.Disposing && !_isDisposing)
+                    {
+                        this.Invoke((Action)(() => LogMessage(message)));
+                        LogDebug("LogMessage invoke successful");
+                    }
+                    else
+                    {
+                        LogDebug($"LogMessage skipped - form disposing/disposed. Message: {message}");
+                    }
+                }
+                catch (ObjectDisposedException ex)
+                {
+                    LogDebug($"LogMessage ObjectDisposedException caught (expected during disposal): {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"LogMessage unexpected exception: {ex}");
+                }
                 return;
             }
             
-            string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-            _txtLog.AppendText($"[{timestamp}] {message}{Environment.NewLine}");
-            _txtLog.SelectionStart = _txtLog.Text.Length;
-            _txtLog.ScrollToCaret();
+            // Additional safety check for UI thread operations
+            if (!this.IsDisposed && !this.Disposing && !_isDisposing && _txtLog != null && !_txtLog.IsDisposed)
+            {
+                try
+                {
+                    string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+                    _txtLog.AppendText($"[{timestamp}] {message}{Environment.NewLine}");
+                    _txtLog.SelectionStart = _txtLog.Text.Length;
+                    _txtLog.ScrollToCaret();
+                    
+                    if (invokeAttempted)
+                        LogDebug("LogMessage UI update successful after invoke");
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"LogMessage UI update failed: {ex}");
+                }
+            }
+            else
+            {
+                LogDebug($"LogMessage UI update skipped - controls disposed. Message: {message}");
+            }
         }
         
         private void LogError(string message)
@@ -373,21 +471,206 @@ namespace VerifonePayment.WinFormsTest
         
         #endregion
         
+        #region "Stability Monitoring Methods"
+        
+        private void LogDebug(string message, [CallerMemberName] string caller = "", [CallerLineNumber] int line = 0)
+        {
+            lock (_logLock)
+            {
+                var threadInfo = $"T{Thread.CurrentThread.ManagedThreadId}{(Thread.CurrentThread.IsBackground ? "B" : "M")}";
+                var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+                var formState = GetFormStateInfo();
+                Debug.WriteLine($"[{timestamp}] [{threadInfo}] [{caller}:{line}] {formState} {message}");
+            }
+        }
+        
+        private void LogOperation(string operation, string status = "START", Exception ex = null)
+        {
+            var message = ex != null 
+                ? $"OPERATION {operation} - {status}: {ex.Message}" 
+                : $"OPERATION {operation} - {status}";
+            LogDebug(message);
+        }
+        
+        private void LogThreadState(string context)
+        {
+            var activeThreads = Process.GetCurrentProcess().Threads.Count;
+            var workingSet = GC.GetTotalMemory(false) / 1024 / 1024;
+            LogDebug($"THREAD_STATE {context} - Active: {activeThreads}, Memory: {workingSet}MB");
+        }
+        
+        private void LogEventSubscription(string eventName, string action)
+        {
+            LogDebug($"EVENT_{action.ToUpper()} {eventName} [Instance: {_instanceId}]");
+        }
+        
+        private string GetFormStateInfo()
+        {
+            if (_isDisposing) return "[DISPOSING]";
+            if (this.IsDisposed) return "[DISPOSED]";
+            if (this.Disposing) return "[DISPOSING_SYS]";
+            if (!this.IsHandleCreated) return "[NO_HANDLE]";
+            if (this.InvokeRequired) return "[CROSS_THREAD]";
+            return "[NORMAL]";
+        }
+        
+        private void LogFormLifecycle(string phase)
+        {
+            LogDebug($"FORM_LIFECYCLE {phase} [Instance: {_instanceId}, Uptime: {_formLifetime.ElapsedMilliseconds}ms]");
+            LogThreadState(phase);
+        }
+        
+        private void EnablePerformanceMonitoring()
+        {
+            _monitoringTimer = new System.Windows.Forms.Timer();
+            _monitoringTimer.Interval = 10000; // 10 seconds
+            _monitoringTimer.Tick += (s, e) =>
+            {
+                try
+                {
+                    var process = Process.GetCurrentProcess();
+                    var workingSet = process.WorkingSet64 / 1024 / 1024;
+                    var gcMemory = GC.GetTotalMemory(false) / 1024 / 1024;
+                    var threadCount = process.Threads.Count;
+                    
+                    LogDebug($"MONITOR - Memory: {workingSet}MB, GC: {gcMemory}MB, Threads: {threadCount}");
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Monitoring error: {ex.Message}");
+                }
+            };
+            _monitoringTimer.Start();
+            LogDebug("Performance monitoring enabled");
+        }
+        
+        #endregion
+        
         #region "Form Events"
         
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            LogFormLifecycle("FORM_CLOSING_START");
+            _isDisposing = true;
+            
             try
             {
+                // Stop performance monitoring
+                if (_monitoringTimer != null)
+                {
+                    _monitoringTimer.Stop();
+                    _monitoringTimer.Dispose();
+                    _monitoringTimer = null;
+                    LogDebug("Performance monitoring stopped");
+                }
+                
                 if (_verifonePayment != null)
                 {
                     LogMessage("Cleaning up payment system...");
+                    LogThreadState("BEFORE_UNSUBSCRIBE");
+                    
+                    // Unsubscribe from events BEFORE teardown to prevent race conditions
+                    LogEventSubscription("StatusEventOccurred", "UNSUBSCRIBE");
+                    _verifonePayment.StatusEventOccurred -= VerifonePayment_StatusEventOccurred;
+                    
+                    LogEventSubscription("TransactionEventOccurred", "UNSUBSCRIBE");
+                    _verifonePayment.TransactionEventOccurred -= VerifonePayment_TransactionEventOccurred;
+                    
+                    LogEventSubscription("DeviceVitalsInformationEventOccurred", "UNSUBSCRIBE");
+                    _verifonePayment.DeviceVitalsInformationEventOccurred -= VerifonePayment_DeviceVitalsInformationEventOccurred;
+                    
+                    LogEventSubscription("BasketEventOccurred", "UNSUBSCRIBE");
+                    _verifonePayment.BasketEventOccurred -= VerifonePayment_BasketEventOccurred;
+                    
+                    LogEventSubscription("NotificationEventOccurred", "UNSUBSCRIBE");
+                    _verifonePayment.NotificationEventOccurred -= VerifonePayment_NotificationEventOccurred;
+                    
+                    LogEventSubscription("PaymentCompletedEventOccurred", "UNSUBSCRIBE");
+                    _verifonePayment.PaymentCompletedEventOccurred -= VerifonePayment_PaymentCompletedEventOccurred;
+                    
+                    LogEventSubscription("CommerceEventOccurred", "UNSUBSCRIBE");
+                    _verifonePayment.CommerceEventOccurred -= VerifonePayment_CommerceEventOccurred;
+                    
+                    LogDebug("All events unsubscribed - calling TearDown");
+                    LogThreadState("BEFORE_TEARDOWN");
+                    
+                    // Now safely call teardown
                     _verifonePayment.TearDown();
+                    LogDebug("TearDown completed");
+                    LogThreadState("AFTER_TEARDOWN");
                 }
             }
             catch (Exception ex)
             {
-                LogError($"Cleanup failed: {ex.Message}");
+                // Log but don't show UI during form closing to avoid disposal issues
+                LogDebug($"Cleanup exception: {ex}");
+                System.Diagnostics.Debug.WriteLine($"Cleanup failed: {ex.Message}");
+            }
+            
+            LogFormLifecycle("FORM_CLOSING_END");
+        }
+        
+        protected override void Dispose(bool disposing)
+        {
+            LogFormLifecycle($"DISPOSE_START - disposing: {disposing}");
+            
+            try
+            {
+                if (disposing)
+                {
+                    // Dispose designer components first
+                    if (components != null)
+                    {
+                        components.Dispose();
+                    }
+                    
+                    // Dispose our managed resources
+                    if (_statusEventReceived != null)
+                    {
+                        _statusEventReceived.Dispose();
+                        _statusEventReceived = null;
+                    }
+                    if (_loginEventReceived != null)
+                    {
+                        _loginEventReceived.Dispose();
+                        _loginEventReceived = null;
+                    }
+                    if (_startSessionStatusEventReceived != null)
+                    {
+                        _startSessionStatusEventReceived.Dispose();
+                        _startSessionStatusEventReceived = null;
+                    }
+                    if (_basketEventStatusEventReceived != null)
+                    {
+                        _basketEventStatusEventReceived.Dispose();
+                        _basketEventStatusEventReceived = null;
+                    }
+                    if (_paymentCompletedEventReceived != null)
+                    {
+                        _paymentCompletedEventReceived.Dispose();
+                        _paymentCompletedEventReceived = null;
+                    }
+                    if (_monitoringTimer != null)
+                    {
+                        _monitoringTimer.Dispose();
+                        _monitoringTimer = null;
+                    }
+                    
+                    LogDebug("Managed resources disposed");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Dispose exception: {ex}");
+            }
+            finally
+            {
+                base.Dispose(disposing);
+                LogFormLifecycle("DISPOSE_END");
+                if (_formLifetime != null)
+                {
+                    _formLifetime.Stop();
+                }
             }
         }
         
