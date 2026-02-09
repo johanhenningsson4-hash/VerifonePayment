@@ -347,7 +347,16 @@ namespace VerifonePayment.Lib
         public void PaymentTransaction(long total, Enums.PaymentType paymentType = Enums.PaymentType.CREDIT, int scale = 2)
         {
             var payment = Payment.Create();
-            payment.RequestedAmounts = payment_sdk_.TransactionManager.BasketManager.CurrentAmountTotals;
+            var current_amount_totals = payment_sdk_.TransactionManager.BasketManager.CurrentAmountTotals;
+            
+            if (current_amount_totals == null)
+            {
+                current_amount_totals = AmountTotals.Create(true);
+                current_amount_totals.SetWithAmounts(new VerifoneSdk.Decimal(scale, total), new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(0),
+                        new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(scale, total));
+            }
+            
+            payment.RequestedAmounts = current_amount_totals;
             payment.RequestedAmounts.Total = new VerifoneSdk.Decimal(scale, total);
             payment.PaymentType = (VerifoneSdk.PaymentType?)paymentType;
 
