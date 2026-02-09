@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <!-- Configuration for VerifonePayment Test Execution -->
+  
+  <!-- .NET Framework runner configuration -->
+  <RunConfiguration>
+    <MaxCpuCount>0</MaxCpuCount>
+    <ResultsDirectory>.\TestResults</ResultsDirectory>
+    <TargetFrameworkVersion>Framework47</TargetFrameworkVersion>
+    <TargetPlatform>x64</TargetPlatform>
+    <TestSessionTimeout>300000</TestSessionTimeout>
+    <TreatNoTestsAsError>false</TreatNoTestsAsError>
+  </RunConfiguration>
+
+  <!-- Data collectors for coverage and diagnostics -->
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <!-- Code Coverage for .NET Framework -->
+      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0" assemblyQualifiedName="Microsoft.VisualStudio.Coverage.DynamicCoverageDataCollector, Microsoft.VisualStudio.TraceCollector, Version=15.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+        <Configuration>
+          <CodeCoverage>
+            <!-- Include VerifonePayment assemblies -->
+            <ModulePaths>
+              <Include>
+                <ModulePath>.*VerifonePayment\.Lib\.dll$</ModulePath>
+                <ModulePath>.*VerifonePayment\..*\.dll$</ModulePath>
+              </Include>
+              <Exclude>
+                <ModulePath>.*Test.*\.dll$</ModulePath>
+                <ModulePath>.*VerifoneSdk\.dll$</ModulePath>
+                <ModulePath>.*Microsoft\..*\.dll$</ModulePath>
+                <ModulePath>.*System\..*\.dll$</ModulePath>
+              </Exclude>
+            </ModulePaths>
+
+            <!-- Exclude generated code and test infrastructure -->
+            <Sources>
+              <Exclude>
+                <Source>.*\\packages\\.*</Source>
+                <Source>.*\\TestResults\\.*</Source>
+                <Source>.*\\obj\\.*</Source>
+                <Source>.*\\.Designer\.cs</Source>
+                <Source>.*\\AssemblyInfo\.cs</Source>
+                <Source>.*\\Resources\.Designer\.cs</Source>
+              </Exclude>
+            </Sources>
+
+            <!-- Company and public key filters -->
+            <CompanyNames>
+              <Exclude>
+                <Company>.*Microsoft.*</Company>
+                <Company>.*Verifone.*</Company>
+              </Exclude>
+            </CompanyNames>
+
+            <!-- Attribute-based exclusions -->
+            <Attributes>
+              <Exclude>
+                <Attribute>^System\.Diagnostics\.DebuggerHiddenAttribute$</Attribute>
+                <Attribute>^System\.Diagnostics\.DebuggerNonUserCodeAttribute$</Attribute>
+                <Attribute>^System\.CodeDom\.Compiler\.GeneratedCodeAttribute$</Attribute>
+                <Attribute>^System\.Diagnostics\.CodeAnalysis\.ExcludeFromCodeCoverageAttribute$</Attribute>
+                <Attribute>^System\.Runtime\.CompilerServices\.CompilerGeneratedAttribute$</Attribute>
+              </Exclude>
+            </Attributes>
+
+            <!-- Function-level exclusions -->
+            <Functions>
+              <Exclude>
+                <Function>^.*\.get_.*\(\)$</Function>
+                <Function>^.*\.set_.*\(.*\)$</Function>
+                <Function>^.*\..ctor\(.*\)$</Function>
+              </Exclude>
+            </Functions>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+
+      <!-- Event Log collector for debugging -->
+      <DataCollector friendlyName="Event Log" uri="datacollector://microsoft/EventLog/2.0">
+        <Configuration>
+          <Setting name="EventLogs" value="Application,System" />
+          <Setting name="EventSources" value="VerifonePayment" />
+        </Configuration>
+      </DataCollector>
+
+      <!-- Performance counter collector -->
+      <DataCollector friendlyName="System Information" uri="datacollector://microsoft/SystemInfo/1.0" />
+    </DataCollectors>
+  </DataCollectionRunSettings>
+
+  <!-- MSTest-specific settings -->
+  <MSTest>
+    <Parallelize>
+      <Workers>0</Workers>
+      <Scope>MethodLevel</Scope>
+    </Parallelize>
+    <ForcedLegacyMode>false</ForcedLegacyMode>
+    <SettingsFile>app.config</SettingsFile>
+    <CaptureTraceOutput>true</CaptureTraceOutput>
+    <DeleteDeploymentDirectoryAfterTestRunIsComplete>true</DeleteDeploymentDirectoryAfterTestRunIsComplete>
+    <DeploymentEnabled>false</DeploymentEnabled>
+  </MSTest>
+
+  <!-- Test platform settings -->
+  <TestRunParameters>
+    <!-- VerifonePayment-specific test parameters -->
+    <Parameter name="VerifoneDeviceIP" value="127.0.0.1" />
+    <Parameter name="VerifonePort" value="12000" />
+    <Parameter name="TestDataPath" value="TestData" />
+    <Parameter name="MockSdkMode" value="true" />
+    <Parameter name="LogLevel" value="Debug" />
+    <Parameter name="TestTimeout" value="30000" />
+    
+    <!-- Integration test settings -->
+    <Parameter name="EnableHardwareTests" value="false" />
+    <Parameter name="SimulatorPath" value="" />
+    <Parameter name="PaymentTestAmount" value="100" />
+    
+    <!-- Database/persistence settings -->
+    <Parameter name="TestConnectionString" value="Data Source=:memory:" />
+  </TestRunParameters>
+
+  <!-- Logger configuration -->
+  <LoggerRunSettings>
+    <Loggers>
+      <Logger friendlyName="console" enabled="True">
+        <Configuration>
+          <Verbosity>normal</Verbosity>
+        </Configuration>
+      </Logger>
+      <Logger friendlyName="trx" enabled="True">
+        <Configuration>
+          <LogFileName>VerifonePayment-TestResults.trx</LogFileName>
+        </Configuration>
+      </Logger>
+    </Loggers>
+  </LoggerRunSettings>
+
+  <!-- Assembly resolution for .NET Framework -->
+  <AssemblyResolution>
+    <Directory path="packages" includeSubDirectories="true" />
+    <Directory path="VerifonePayment.Lib\bin" includeSubDirectories="true" />
+  </AssemblyResolution>
+</RunSettings>
