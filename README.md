@@ -1,6 +1,6 @@
 # Verifone Payment Integration Library
 
-A .NET Framework library for integrating with Verifone payment devices, providing a managed wrapper around the Verifone SDK with comprehensive configuration management, event-driven architecture, and complete refund processing capabilities.
+A .NET Framework library for integrating with Verifone payment devices, providing a managed wrapper around the Verifone SDK with comprehensive configuration management, event-driven architecture, complete refund processing, and advanced receipt handling capabilities.
 
 ## Features
 
@@ -8,6 +8,8 @@ A .NET Framework library for integrating with Verifone payment devices, providin
 - **Event-Driven Architecture**: Comprehensive event handling for payment operations
 - **Payment Processing**: Support for various payment types and transaction management
 - **Refund Processing**: Complete linked and unlinked refund functionality with partial refund support
+- **Receipt Handling**: Advanced receipt processing, validation, formatting, and archiving capabilities
+- **Reconciliation & Reporting**: Complete end-of-day operations, transaction querying, and Store & Forward (SAF) support
 - **Merchandise Management**: Basket operations for adding/removing items
 - **Device Management**: Complete device lifecycle management (initialization, login, sessions, teardown)
 - **Logging Support**: Configurable logging with automatic file management
@@ -74,6 +76,10 @@ payment.RefundCompletedEventOccurred += (sender, e) => {
     Console.WriteLine($"Refund completed: {e.Status}");
 };
 
+payment.PrintEventOccurred += (sender, e) => {
+    Console.WriteLine($"Print event: {e.Status}");
+};
+
 // Basic workflow
 try
 {
@@ -87,6 +93,23 @@ try
     payment.AddMerchandise();
     string paymentId = Guid.NewGuid().ToString();
     payment.PaymentTransaction(1000, paymentId, "EUR"); // $10.00
+    
+    // Extract and handle receipts (after payment completion)
+    // Note: Receipt extraction would typically happen in payment completion event
+    // var receiptWrapper = payment.ExtractReceipt(paymentObject);
+    // if (receiptWrapper != null && receiptWrapper.IsValid())
+    // {
+    //     // Save receipt in multiple formats
+    //     payment.SaveReceipt(receiptWrapper, "receipt.txt", "txt");
+    //     payment.SaveReceipt(receiptWrapper, "receipt.html", "html");
+    //     
+    //     // Archive receipt with timestamp
+    //     payment.ArchiveReceipt(receiptWrapper, @"C:\Receipts", paymentId);
+    //     
+    //     // Validate receipt content
+    //     var validation = payment.ValidateReceipt(receiptWrapper);
+    //     if (!validation.IsValid) Console.WriteLine(validation.GetDetailedReport());
+    // }
     
     // Process refunds (after successful payment)
     // Full refund (linked to original payment)
@@ -181,6 +204,37 @@ var payment = new VerifonePayment("192.168.1.100");
 - **Multi-Currency Support**: EUR, USD, GBP, and other standard currencies
 - **Automatic Invoice Generation**: Unique refund IDs with timestamp
 
+#### Receipt Handling
+- `ExtractReceipt(payment)` - Extract and wrap receipt from Payment object
+- `SaveReceipt(receipt, filePath, format)` - Save receipt in multiple formats (txt, html, metadata)
+- `ArchiveReceipt(receipt, directory, transactionId)` - Archive receipt with timestamp
+- `ValidateReceipt(receipt)` - Comprehensive receipt validation with detailed reporting
+- `PrintReceipt(receipt, copies)` - Print receipt if printing is supported
+- `IsPrintingSupported()` - Check if printing capability is available
+
+**Receipt Features:**
+- **Multiple Formats**: Plain text, HTML, and metadata export
+- **Content Validation**: Comprehensive validation with issues and warnings
+- **Flexible Extraction**: Reflection-based receipt extraction for SDK compatibility
+- **Archive Management**: Timestamped receipt storage with unique filenames
+- **Print Support**: Automatic printing capability detection
+- **Configuration Access**: Logo, QR code, cashier name, and customization options
+
+#### Reconciliation & Reporting
+- `IsReportingCapable(capability)` - Check if reporting capability is supported
+- `ClosePeriod()` - Close current period (end of day)
+- `ClosePeriodAndReconcile(acquirers)` - Close period and reconcile in single operation
+- `QueryTransactions(parameters)` - Query transactions with filtering and pagination
+- `QuerySAFTransactions(startTime, endTime)` - Query Store and Forward transactions
+- `GetSupportedCapabilities()` - Get all supported reporting capabilities
+
+**Reporting Features:**
+- **Unlinked Refunds**: Standalone refunds without payment reference
+- **Full Refunds**: Pass `null` for refundAmount in linked refunds
+- **Partial Refunds**: Specify exact amount to refund (must not exceed original)
+- **Multi-Currency Support**: EUR, USD, GBP, and other standard currencies
+- **Automatic Invoice Generation**: Unique refund IDs with timestamp
+
 #### Configuration & Validation
 - `ValidateConfiguration()` - Check if current configuration is valid
 - `GetConfigurationSummary()` - Get a summary of current settings
@@ -200,6 +254,10 @@ Available events:
 - `NotificationEventOccurred` - General notifications
 - `PaymentCompletedEventOccurred` - Payment completion events
 - `RefundCompletedEventOccurred` - Refund completion events
+- `ReconciliationEventOccurred` - Reconciliation and end-of-day events
+- `TransactionQueryEventOccurred` - Transaction query result events
+- `PrintEventOccurred` - Receipt printing events
+- `ReceiptDeliveryMethodEventOccurred` - Receipt delivery method events
 - `CommerceEventOccurred` - Commerce-related events
 
 ## Sample Applications
@@ -209,9 +267,11 @@ Available events:
 The included `VerifonePayment.Test` project provides a comprehensive example with an interactive menu for testing all library features including:
 - Complete payment workflow (SDK initialization ? Login ? Session ? Payment ? Teardown)
 - **Refund Processing**: Both linked and unlinked refunds with full/partial options
+- **Receipt Handling**: Receipt extraction, validation, saving, and archiving
+- **Reconciliation & Reporting**: End-of-day operations, transaction queries, and capability checking
 - **Workflow Validation**: State management ensuring proper operation sequence
-- **Real-time Event Monitoring**: Live display of all payment and refund events
-- **Interactive Refund Options**: Choose between full refunds or specify partial amounts
+- **Real-time Event Monitoring**: Live display of all payment, refund, receipt, and reconciliation events
+- **Interactive Options**: Choose formats, amounts, and processing methods
 
 ### Windows Forms Test Application
 
@@ -237,6 +297,67 @@ VerifonePayment.WinFormsTest.exe
 ```
 
 See [WinForms Test README](VerifonePayment.WinFormsTest/README.md) for detailed usage instructions.
+
+## Receipt Processing Guide
+
+### Receipt Extraction and Validation
+
+Extract and validate receipts from completed payment transactions:
+
+```csharp
+// Extract receipt from Payment object (typically in payment completion event)
+var receiptWrapper = payment.ExtractReceipt(paymentObject);
+
+if (receiptWrapper != null)
+{
+    // Validate receipt content and configuration
+    var validation = payment.ValidateReceipt(receiptWrapper);
+    
+    if (validation.IsValid)
+    {
+        Console.WriteLine("? Receipt is valid");
+    }
+    else
+    {
+        Console.WriteLine(validation.GetDetailedReport());
+    }
+}
+```
+
+### Receipt Saving and Archiving
+
+Save receipts in multiple formats or archive for long-term storage:
+
+```csharp
+// Save in different formats
+payment.SaveReceipt(receiptWrapper, "receipt.txt", "txt");        // Plain text
+payment.SaveReceipt(receiptWrapper, "receipt.html", "html");      // HTML format
+payment.SaveReceipt(receiptWrapper, "receipt_full.txt", "metadata"); // With metadata
+
+// Archive with timestamp and transaction ID
+string archivePath = payment.ArchiveReceipt(receiptWrapper, @"C:\Receipts", transactionId);
+Console.WriteLine($"Receipt archived to: {archivePath}");
+```
+
+### Receipt Printing and Content Access
+
+Print receipts and access receipt content and configuration:
+
+```csharp
+// Check printing capability and print
+if (payment.IsPrintingSupported())
+{
+    payment.PrintReceipt(receiptWrapper, copies: 2);
+}
+
+// Access receipt content and properties
+Console.WriteLine($"Receipt Type: {receiptWrapper.ReceiptType}");
+Console.WriteLine($"Has QR Code: {receiptWrapper.IsQrCodeIncluded}");
+Console.WriteLine($"Cashier: {receiptWrapper.CashierName}");
+
+// Get preferred content format
+string content = receiptWrapper.GetPreferredContent(); // HTML if available, else plain text
+```
 
 ## Refund Processing Guide
 
