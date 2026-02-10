@@ -1,0 +1,94 @@
+VerifoneSdk::Receipt
+Last updated: 17-Jan-2023
+Download as PDF
+class Receipt
+Provided as a part of the Payment object when a payment is received.
+
+This object cannot be retrieved at a later time, and should be stored if re-printing may be required.
+
+Public Functions
+
+Receipt()
+Factory methord to create Receipt object.
+
+System::String GetTextAtSection(VerifoneSdk::ReceiptSectionsection)const
+Allows additional customization of the receipt at specific compliant sections of the receipt.
+
+bool HasCustomFooter()const
+Returns true if the merchant has decided to include a custom mFooter, or false otherwise.
+
+Defaults to false.
+
+bool HasCustomHeader()const
+Returns true if the merchant has decided to include a custom header, or false otherwise.
+
+Defaults to false.
+
+bool VerifoneSdk::Receipt::InsertTextAtSection(System::String^ text, VerifoneSdk::ReceiptSection receiptSection)
+Refer to getTextAtSection.
+
+Public Members
+
+const System::String AsHtml
+Returns the final receipt as HTML.
+
+const System::String AsPlainText
+Returns the final receipt as plain text.
+
+const System::String BusinessInfo
+The Business Info section of the receipt, as customized by the merchant in the receipt settings for this venue.
+
+const System::String CashierName
+Return Cashier name.
+
+const System::String CustomFooter
+The footer as defined by the merchant in receipt settings.
+
+const System::String CustomGreeting
+Return custom greeting message.
+
+const System::String Footer
+The footer as modified by other applications in response to the REQUEST_APPEND_RECEIPT API.
+
+const bool IsCashierNameIncluded
+Returns true if the merchant has decided to include the cashier’s name, or false otherwise.
+
+Defaults to false.
+
+const bool IsLogoIncluded
+Returns true if the merchant has decided to include their logo, or false otherwise.
+
+Defaults to false.
+
+const bool IsOnlineUrlIncluded
+Returns true if the merchant has decided to include an online url for the receipt, or false otherwise.
+
+Defaults to false.
+
+const bool IsQrCodeIncluded
+Returns true if the merchant has decided to include the QR Code with the online url, or false otherwise.
+
+Defaults to false.
+
+const System::String OnlineUrl
+The mFooter as modified by other applications in response to the REQUEST_APPEND_RECEIPT API.
+
+Returns the online URL in an HTML-formatted string, including a QR code image if entered by the merchant.
+
+const System::String OriginalHtml
+Returns the original HTML of the receipt as received from the payment application.
+
+constVerifoneSdk::ImageOriginalImage
+Convenience method to get the original receipt from the payment application as an image.
+
+const System::String PaymentInformation
+The payment information, in particular, the EMV fields or other relevant lines necessary for legal compliance, as provided by the payment application.
+
+const System::String QrCodeImage
+Return the Qr code image.
+
+constVerifoneSdk::OptionalReceiptType> ReceiptType
+The type of receipt, generally either for the customer or for the merchant.
+
+const System::String TransactionInformation
+The transaction information, including basket, adjustments, offers, donations, taxes, and totals, as provided by the payment application.

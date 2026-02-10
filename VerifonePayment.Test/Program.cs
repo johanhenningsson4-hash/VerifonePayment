@@ -16,6 +16,8 @@ namespace VerifonePayment.Test
         private static ManualResetEvent basketEventStatusEventReceived = new ManualResetEvent(false);
         private static ManualResetEvent paymentCompletedEventReceived = new ManualResetEvent(false);
         private static ManualResetEvent refundCompletedEventReceived = new ManualResetEvent(false);
+        private static ManualResetEvent reconciliationEventReceived = new ManualResetEvent(false);
+        private static ManualResetEvent transactionQueryEventReceived = new ManualResetEvent(false);
 
         // State management for workflow validation
         private static bool isSDKInitialized = false;
@@ -49,6 +51,8 @@ namespace VerifonePayment.Test
                 verifonePayment.NotificationEventOccurred += VerifonePayment_NotificationEventOccurred;
                 verifonePayment.PaymentCompletedEventOccurred += VerifonePayment_PaymentCompletedEventOccurred;
                 verifonePayment.RefundCompletedEventOccurred += VerifonePayment_RefundCompletedEventOccurred;
+                verifonePayment.ReconciliationEventOccurred += VerifonePayment_ReconciliationEventOccurred;
+                verifonePayment.TransactionQueryEventOccurred += VerifonePayment_TransactionQueryEventOccurred;
                 verifonePayment.CommerceEventOccurred += VerifonePayment_CommerceEventOccurred;
 
                 bool running = true;
@@ -65,8 +69,11 @@ namespace VerifonePayment.Test
                     Console.WriteLine($"7. LinkedRefund {(isRefundEnabled ? "✓ ENABLED" : "✗ DISABLED")} {(!hasCompletedPayment ? "(Requires completed payment)" : "")}");
                     Console.WriteLine($"8. UnlinkedRefund {(isSessionStarted ? "○ AVAILABLE" : "✗ DISABLED")} {(!isSessionStarted ? "(Requires Session)" : "")}");
                     Console.WriteLine("9. EndSession");
-                    Console.WriteLine("10. TearDown");
-                    Console.WriteLine("11. Run Unit Tests");
+                    Console.WriteLine("10. ClosePeriod (End of Day)");
+                    Console.WriteLine("11. QueryTransactions");
+                    Console.WriteLine("12. GetSupportedCapabilities");
+                    Console.WriteLine("13. TearDown");
+                    Console.WriteLine("14. Run Unit Tests");
                     Console.WriteLine("S. Show Workflow Status");
                     Console.WriteLine("0. Exit");
                     
@@ -247,6 +254,107 @@ namespace VerifonePayment.Test
                             break;
                             
                         case "10":
+                            if (!isSessionStarted)
+                            {
+                                Console.WriteLine("❌ Please start a session first (option 3)");
+                                break;
+                            }
+                            Console.WriteLine("Closing period (End of Day)...");
+                            try
+                            {
+                                if (verifonePayment.IsReportingCapable("CLOSE_PERIOD_CAPABILITY"))
+                                {
+                                    verifonePayment.ClosePeriod();
+                                    WaitForEvent(reconciliationEventReceived, "ClosePeriod");
+                                    Console.WriteLine("✓ Period closed successfully!");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("⚠️ CLOSE_PERIOD_CAPABILITY not supported by current Payment App or Host");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"❌ Error closing period: {ex.Message}");
+                            }
+                            break;
+
+                        case "11":
+                            if (!isSessionStarted)
+                            {
+                                Console.WriteLine("❌ Please start a session first (option 3)");
+                                break;
+                            }
+                            Console.WriteLine("Querying transactions...");
+                            try
+                            {
+                                if (verifonePayment.IsReportingCapable("TRANSACTION_QUERY_CAPABILITY"))
+                                {
+                                    Console.WriteLine("1. Query all transactions");
+                                    Console.WriteLine("2. Query SAF (offline) transactions");
+                                    Console.WriteLine("3. Query with time range");
+                                    Console.Write("Choose query type (1, 2, or 3): ");
+                                    var queryChoice = Console.ReadLine();
+
+                                    switch (queryChoice)
+                                    {
+                                        case "1":
+                                            verifonePayment.QueryTransactions();
+                                            break;
+                                        case "2":
+                                            // Query SAF transactions from 1 hour ago
+                                            long oneHourAgo = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds();
+                                            verifonePayment.QuerySAFTransactions(oneHourAgo);
+                                            break;
+                                        case "3":
+                                            Console.Write("Enter start time (Unix timestamp, or press Enter for 1 hour ago): ");
+                                            var startInput = Console.ReadLine();
+                                            long startTime = string.IsNullOrEmpty(startInput) ? 
+                                                DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds() :
+                                                long.Parse(startInput);
+                                            verifonePayment.QueryTransactions(startTime: startTime);
+                                            break;
+                                        default:
+                                            Console.WriteLine("❌ Invalid choice");
+                                            break;
+                                    }
+                                    if (queryChoice == "1" || queryChoice == "2" || queryChoice == "3")
+                                    {
+                                        WaitForEvent(transactionQueryEventReceived, "QueryTransactions");
+                                        Console.WriteLine("✓ Transaction query completed!");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("⚠️ TRANSACTION_QUERY_CAPABILITY not supported by current Payment App or Host");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"❌ Error querying transactions: {ex.Message}");
+                            }
+                            break;
+
+                        case "12":
+                            Console.WriteLine("Checking supported capabilities...");
+                            try
+                            {
+                                var capabilities = verifonePayment.GetSupportedCapabilities();
+                                Console.WriteLine("\n=== Supported Capabilities ===");
+                                foreach (var capability in capabilities)
+                                {
+                                    string status = capability.Value ? "✓ SUPPORTED" : "✗ NOT SUPPORTED";
+                                    Console.WriteLine($"{capability.Key}: {status}");
+                                }
+                                Console.WriteLine("===============================");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"❌ Error checking capabilities: {ex.Message}");
+                            }
+                            break;
+
+                        case "13":
                             Console.WriteLine("Tearing down SDK...");
                             verifonePayment.TearDown();
                             WaitForEvent(statusEventReceived, "TearDown");
@@ -263,7 +371,7 @@ namespace VerifonePayment.Test
                             Console.WriteLine("✓ SDK teardown completed");
                             break;
 
-                        case "11":
+                        case "14":
                             RunUnitTests();
                             break;
 
@@ -455,6 +563,49 @@ namespace VerifonePayment.Test
 
             if (e.Type == Lib.Enums.EventType.STATUS_ERROR && e.Status == "-20")
                 startSessionStatusEventReceived.Set();
+        }
+
+        /// <summary>
+        /// Event handler for ReconciliationEventOccurred
+        /// </summary>
+        /// <param name="sender">The sender</param>
+        /// <param name="e">The event arguments</param>
+        private static void VerifonePayment_ReconciliationEventOccurred(object sender, Lib.Models.PaymentEventArgs e)
+        {
+            Console.WriteLine($"   - Reconciliation Status: {e.Status}, Type: {e.Type}, Message: {e.Message}");
+            
+            // Parse reconciliation event details
+            if (e.Status == "0") // Success
+            {
+                Console.WriteLine("✓ Reconciliation completed successfully");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Reconciliation issue: Status {e.Status}");
+            }
+            
+            reconciliationEventReceived.Set();
+        }
+
+        /// <summary>
+        /// Event handler for TransactionQueryEventOccurred
+        /// </summary>
+        /// <param name="sender">The sender</param>
+        /// <param name="e">The event arguments</param>
+        private static void VerifonePayment_TransactionQueryEventOccurred(object sender, Lib.Models.PaymentEventArgs e)
+        {
+            Console.WriteLine($"   - Transaction Query Status: {e.Status}, Type: {e.Type}, Message: {e.Message}");
+            
+            if (e.Status == "0") // Success
+            {
+                Console.WriteLine("✓ Transaction query completed successfully");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Transaction query issue: Status {e.Status}");
+            }
+            
+            transactionQueryEventReceived.Set();
         }
 
         /// <summary>

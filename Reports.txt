@@ -1,0 +1,75 @@
+Reports
+Last updated: 23-Dec-2022
+Download as PDF
+The ReportManager provides the APIs for reports as well as searching for transactions using a TransactionQuery. Not all regions and host integrations support all of the APIs, so it is critical to check the capability before calling the APIs, or handling the matching error event properly. Unless noted specifically, the methods only require the current state to be TransactionManager.STATE_LOGGED_IN (see state-matters).
+
+Is Capable?
+The ReportManager.isCapable(String) method allows the calling application to check if the current Payment App or Payment Host are able to perform a specific operation. This call is one of the few that returns synchronously (see all-calls-are-async), and it can be sent in any state (see state-matters).
+
+See also
+
+ReportManager.GET_ACTIVE_TOTALS_CAPABILITY
+
+ReportManager.GET_GROUP_TOTALS_CAPABILITY
+
+ReportManager.CLOSE_PERIOD_CAPABILITY
+
+ReportManager.TERMINAL_RECONCILIATION_CAPABILITY
+
+ReportManager.ACQUIRER_RECONCILIATION_CAPABILITY
+
+ReportManager.PREVIOUS_RECONCILIATION_CAPABILITY
+
+ReportManager.TRANSACTION_QUERY_CAPABILITY
+
+ReportManager.TOTALS_GROUP_ID_CAPABILITY
+
+ReportManager.CLOSE_PERIOD_AND_RECONCILE_CAPABILITY
+
+ReportManager.GET_PREVIOUS_RECONCILIATION_CAPABILITY
+
+ReportManager.RECONCILIATION_LIST_CAPABILITY
+
+ReportManager.RECONCILIATION_REPORT_CAPABILITY
+
+TransactionQuery.TRANSACTION_QUERY_FILTER_FIELDS_CAPABILITY
+
+TransactionQuery.TRANSACTION_QUERY_PAYMENT_ID_BOUNDS_CAPABILITY
+
+TransactionQuery.TRANSACTION_QUERY_BY_PAYMENT_CAPABILITY
+
+The Reconciliation Event
+The ReconciliationEvent is the most important component to the reports. It contains list of ReconciliationTotal objects, providing a summary report grouped by the transaction type (such as PAYMENT, REFUND, etc.), payment type (such as Credit, Cash, etc.), and the status (success or failed). Similar to other status objects, if the status is non-zero, an error occurred for that group, and a message is available that can be displayed to the cashier or included on a printed report to provide more details.
+
+In some cases, this event also contains an ID (ReconciliationTotal.getReconciliationId()), useful for retrieving the result again later (ReconciliationTotal.getPreviousReconciliation(String)), and a Report that is directly printable (see Print Receipt).
+
+Note
+
+It is possible to receive a successful reconciliation event without totals, ID, or Report. In this case, another call will be necessary to print the settlement report if capable, otherwise the current payment app / host integration simply does not support generating reports for settlement/end-of-day.
+
+Querying Transactions
+To perform ReportManager.queryTransactions(query), a TransactionQuery must be created. There are many different options to search and filter the results, most of which are covered in the documentation of the class itself, but a couple of which ought to be described further here.
+
+By default, the query will only return transactions for the POS making the query. To return transactions performed by all POS systems connecting to the payment terminal, use TransactionQuery.setAllPos(bool).
+
+Query Pending Store and Forward (SAF) Transactions
+To query pending Store and Forward (SAF) transactions, the transaction query must be marked as offline via TransactionQuery.setOffline(bool). This setting solicits the reporting of all transactions which were ever offline, not just those that are currently offline. It is typically useful to specify a starting time for which the offline transactions are reported via TransactionQuery.setStartTime(...). A command is also available to specify the ending time for the report via TransactionQuery.setEndTime(...), however this is rarely used, in order to report transactions up until the present.
+
+Java
+Kotlin
+Swift
+C#
+C++
+.NET
+var query = TransactionQuery.Create();
+query.IsOffline = true;
+query.StartTime = 1589302704000;
+payment_sdk_.TransactionManager.ReportManager.QueryTransactions(query);
+// Listener receives the TransactionQueryEvent.
+ 
+
+Searching using Payments
+This is primarily useful when Payment.getAuthResult() returns AuthorizationResult.AUTHORIZED_OFFLINE, but can be helpful for other scenarios as well. These payment objects only need to contain the App Specific Data from the original payment, none of the other fields need to be populated. See Linking Payments for more information on creating new payments that include this information.
+
+Pagination/Range
+The transaction query supports setting a TransactionQuery.setLimit(int) and an TransactionQuery.setOffset(int). The ordering is determined by the Payment App or the Host, and is not configurable. The other way to paginate is to TransactionQuery.setStartTime(...) and TransactionQuery.setEndTime(...), or the other similar start/end fields, and then send multiple queries. The limit and offset are not always supported by the Host, but it is globally supported to specify the time range and the payment ID range.

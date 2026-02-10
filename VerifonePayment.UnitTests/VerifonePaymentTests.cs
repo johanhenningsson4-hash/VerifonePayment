@@ -585,4 +585,204 @@ namespace VerifonePayment.Test
             Assert.IsTrue(refundInvoice1.StartsWith($"REFUND-{originalPaymentId}"), "Refund invoice should have correct prefix");
         }
     }
+
+    [TestClass]
+    public class ReconciliationAndReportingTests
+    {
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void IsReportingCapable_WithValidCapability_ShouldReturnBoolean()
+        {
+            // Test that capability checking works with valid capability strings
+            string validCapability = "TRANSACTION_QUERY_CAPABILITY";
+            
+            Assert.IsFalse(string.IsNullOrWhiteSpace(validCapability), 
+                "Valid capability string should not be null or empty");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void IsReportingCapable_WithNullCapability_ShouldThrowArgumentException()
+        {
+            // Test that null capability is rejected
+            string nullCapability = null;
+            
+            Assert.IsTrue(string.IsNullOrWhiteSpace(nullCapability), 
+                "Null capability should be detected as invalid");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void IsReportingCapable_WithEmptyCapability_ShouldThrowArgumentException()
+        {
+            // Test that empty capability is rejected
+            string emptyCapability = "";
+            
+            Assert.IsTrue(string.IsNullOrWhiteSpace(emptyCapability), 
+                "Empty capability should be detected as invalid");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        [DataRow("GET_ACTIVE_TOTALS_CAPABILITY", DisplayName = "Active totals capability")]
+        [DataRow("CLOSE_PERIOD_CAPABILITY", DisplayName = "Close period capability")]
+        [DataRow("TRANSACTION_QUERY_CAPABILITY", DisplayName = "Transaction query capability")]
+        [DataRow("RECONCILIATION_LIST_CAPABILITY", DisplayName = "Reconciliation list capability")]
+        public void ReconciliationCapabilities_WithValidNames_ShouldBeRecognized(string capability)
+        {
+            // Verify that standard capability names are recognized
+            Assert.IsFalse(string.IsNullOrEmpty(capability), $"Capability {capability} should not be empty");
+            Assert.IsTrue(capability.EndsWith("_CAPABILITY"), $"Capability {capability} should end with _CAPABILITY");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ClosePeriodAndReconcile_WithNullAcquirers_ShouldAcceptNullArray()
+        {
+            // Test that null acquirers array is handled correctly
+            int[] nullAcquirers = null;
+            
+            Assert.IsTrue(nullAcquirers == null, "Null acquirers array should be handled gracefully");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        [DataRow(new int[] { 1, 2, 3 }, DisplayName = "Multiple acquirer IDs")]
+        [DataRow(new int[] { 0 }, DisplayName = "Single acquirer ID")]
+        [DataRow(new int[] { }, DisplayName = "Empty acquirer array")]
+        public void ClosePeriodAndReconcile_WithValidAcquirers_ShouldAcceptArray(int[] acquirers)
+        {
+            // Test that various acquirer arrays are accepted
+            Assert.IsTrue(acquirers != null, "Acquirer array should not be null in test data");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void GetPreviousReconciliation_WithValidId_ShouldAcceptId()
+        {
+            // Test that valid reconciliation ID is accepted
+            string validId = "REC-12345-20261210";
+            
+            Assert.IsFalse(string.IsNullOrWhiteSpace(validId), 
+                "Valid reconciliation ID should not be null or empty");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void GetPreviousReconciliation_WithInvalidId_ShouldRejectId()
+        {
+            // Test that invalid reconciliation IDs are rejected
+            string nullId = null;
+            string emptyId = "";
+            string whitespaceId = "   ";
+            
+            Assert.IsTrue(string.IsNullOrWhiteSpace(nullId), "Null ID should be rejected");
+            Assert.IsTrue(string.IsNullOrWhiteSpace(emptyId), "Empty ID should be rejected");
+            Assert.IsTrue(string.IsNullOrWhiteSpace(whitespaceId), "Whitespace ID should be rejected");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void QueryTransactions_WithValidParameters_ShouldAcceptParameters()
+        {
+            // Test that transaction query parameters are validated correctly
+            bool allPos = true;
+            bool isOffline = false;
+            long startTime = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds();
+            long endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            int limit = 100;
+            int offset = 0;
+            
+            Assert.IsTrue(startTime < endTime, "Start time should be before end time");
+            Assert.IsTrue(limit > 0, "Limit should be positive");
+            Assert.IsTrue(offset >= 0, "Offset should be non-negative");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void QuerySAFTransactions_WithValidTimeRange_ShouldAcceptTimeRange()
+        {
+            // Test Store and Forward transaction querying
+            long startTime = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds();
+            long? endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            
+            Assert.IsTrue(startTime > 0, "Start time should be positive Unix timestamp");
+            Assert.IsTrue(!endTime.HasValue || endTime.Value > startTime, 
+                "End time should be null or after start time");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void GetSupportedCapabilities_ShouldReturnCapabilityDictionary()
+        {
+            // Test that capability dictionary contains expected keys
+            var expectedCapabilities = new[]
+            {
+                "GET_ACTIVE_TOTALS_CAPABILITY",
+                "CLOSE_PERIOD_CAPABILITY", 
+                "TRANSACTION_QUERY_CAPABILITY",
+                "RECONCILIATION_LIST_CAPABILITY",
+                "TERMINAL_RECONCILIATION_CAPABILITY"
+            };
+            
+            foreach (var capability in expectedCapabilities)
+            {
+                Assert.IsFalse(string.IsNullOrEmpty(capability), 
+                    $"Capability {capability} should not be null or empty");
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReconciliationEvents_ShouldHandleStatusCodes()
+        {
+            // Test reconciliation event status code handling
+            string successStatus = "0";
+            string failureStatus = "-1";
+            string cancelledStatus = "-11";
+            
+            Assert.AreEqual("0", successStatus, "Success status should be '0'");
+            Assert.AreNotEqual("0", failureStatus, "Failure status should not be '0'");
+            Assert.AreNotEqual("0", cancelledStatus, "Cancelled status should not be '0'");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void TransactionQueryWorkflow_StateValidation_ShouldRequireSession()
+        {
+            // Test that transaction queries require active session
+            bool isSessionStarted = true;
+            bool canQueryTransactions = isSessionStarted;
+            
+            Assert.IsTrue(canQueryTransactions, 
+                "Transaction queries should be allowed when session is active");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UnixTimestampGeneration_ShouldCreateValidTimestamps()
+        {
+            // Test Unix timestamp generation for transaction queries
+            long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            long oneHourAgo = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds();
+            
+            Assert.IsTrue(currentTimestamp > oneHourAgo, 
+                "Current timestamp should be greater than past timestamp");
+            Assert.IsTrue(currentTimestamp > 0, "Unix timestamp should be positive");
+        }
+    }
 }

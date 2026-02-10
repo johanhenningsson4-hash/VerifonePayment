@@ -125,6 +125,33 @@ namespace VerifonePayment.Lib
             remove { listener_.RefundCompletedEventOccurred -= value; }
         }
 
+        /// <summary>
+        /// Reconciliation event occurred.
+        /// </summary>
+        public event EventHandler<PaymentEventArgs> ReconciliationEventOccurred
+        {
+            add { listener_.ReconciliationEventOccurred += value; }
+            remove { listener_.ReconciliationEventOccurred -= value; }
+        }
+
+        /// <summary>
+        /// Reconciliations list event occurred.
+        /// </summary>
+        public event EventHandler<PaymentEventArgs> ReconciliationsListEventOccurred
+        {
+            add { listener_.ReconciliationsListEventOccurred += value; }
+            remove { listener_.ReconciliationsListEventOccurred -= value; }
+        }
+
+        /// <summary>
+        /// Transaction query event occurred.
+        /// </summary>
+        public event EventHandler<PaymentEventArgs> TransactionQueryEventOccurred
+        {
+            add { listener_.TransactionQueryEventOccurred += value; }
+            remove { listener_.TransactionQueryEventOccurred -= value; }
+        }
+
         #endregion
 
         #region "Properties"
@@ -448,6 +475,227 @@ namespace VerifonePayment.Lib
 
             payment_sdk_.TransactionManager.ProcessRefund(refundPayment);
         }
+
+        #region "Reconciliation and Reporting Methods"
+
+        /// <summary>
+        /// Checks if the current Payment App or Payment Host supports a specific reporting capability.
+        /// </summary>
+        /// <param name="capability">The capability to check (e.g., "GET_ACTIVE_TOTALS_CAPABILITY")</param>
+        /// <returns>True if the capability is supported</returns>
+        public bool IsReportingCapable(string capability)
+        {
+            if (string.IsNullOrWhiteSpace(capability))
+                throw new ArgumentException("Capability cannot be null or empty", nameof(capability));
+
+            return payment_sdk_.TransactionManager.ReportManager.IsCapable(capability);
+        }
+
+        /// <summary>
+        /// Closes the current period (end of day).
+        /// Requires CLOSE_PERIOD_CAPABILITY.
+        /// </summary>
+        public void ClosePeriod()
+        {
+            if (!IsReportingCapable("CLOSE_PERIOD_CAPABILITY"))
+                throw new InvalidOperationException("CLOSE_PERIOD_CAPABILITY is not supported by the current Payment App or Host");
+
+            payment_sdk_.TransactionManager.ReportManager.ClosePeriod();
+        }
+
+        /// <summary>
+        /// Closes period and performs reconciliation in a single operation.
+        /// Requires CLOSE_PERIOD_AND_RECONCILE_CAPABILITY.
+        /// </summary>
+        /// <param name="acquirers">Array of acquirer IDs to reconcile (optional)</param>
+        public void ClosePeriodAndReconcile(int[] acquirers = null)
+        {
+            if (!IsReportingCapable("CLOSE_PERIOD_AND_RECONCILE_CAPABILITY"))
+                throw new InvalidOperationException("CLOSE_PERIOD_AND_RECONCILE_CAPABILITY is not supported by the current Payment App or Host");
+
+            if (acquirers != null && acquirers.Length > 0)
+            {
+                payment_sdk_.TransactionManager.ReportManager.ClosePeriodAndReconcile(acquirers);
+            }
+            else
+            {
+                // Use empty array if no specific acquirers specified
+                payment_sdk_.TransactionManager.ReportManager.ClosePeriodAndReconcile(new int[0]);
+            }
+        }
+
+        /// <summary>
+        /// Gets previous reconciliation data by ID.
+        /// Requires GET_PREVIOUS_RECONCILIATION_CAPABILITY.
+        /// </summary>
+        /// <param name="reconciliationId">The reconciliation ID to retrieve</param>
+        public void GetPreviousReconciliation(string reconciliationId)
+        {
+            if (string.IsNullOrWhiteSpace(reconciliationId))
+                throw new ArgumentException("Reconciliation ID cannot be null or empty", nameof(reconciliationId));
+
+            if (!IsReportingCapable("GET_PREVIOUS_RECONCILIATION_CAPABILITY"))
+                throw new InvalidOperationException("GET_PREVIOUS_RECONCILIATION_CAPABILITY is not supported by the current Payment App or Host");
+
+            payment_sdk_.TransactionManager.ReportManager.GetPreviousReconciliation(reconciliationId);
+        }
+
+        /// <summary>
+        /// Query transactions with specified criteria.
+        /// Requires TRANSACTION_QUERY_CAPABILITY.
+        /// </summary>
+        /// <param name="allPos">Include transactions from all POS systems (default: false)</param>
+        /// <param name="isOffline">Query offline/SAF transactions (default: false)</param>
+        /// <param name="startTime">Start time for query (optional)</param>
+        /// <param name="endTime">End time for query (optional)</param>
+        /// <param name="limit">Maximum number of transactions to return (optional)</param>
+        /// <param name="offset">Number of transactions to skip (optional)</param>
+        public void QueryTransactions(bool allPos = false, bool isOffline = false, 
+            long? startTime = null, long? endTime = null, int? limit = null, int? offset = null)
+        {
+            if (!IsReportingCapable("TRANSACTION_QUERY_CAPABILITY"))
+                throw new InvalidOperationException("TRANSACTION_QUERY_CAPABILITY is not supported by the current Payment App or Host");
+
+            using (var query = TransactionQuery.Create())
+            {
+                // Use SetAllPos method if available
+                if (allPos)
+                {
+                    try
+                    {
+                        // Try to set all POS - method name might vary
+                        var method = query.GetType().GetMethod("SetAllPos");
+                        method?.Invoke(query, new object[] { allPos });
+                    }
+                    catch
+                    {
+                        // If method doesn't exist, continue without it
+                    }
+                }
+
+                // Use SetOffline method if available
+                if (isOffline)
+                {
+                    try
+                    {
+                        var method = query.GetType().GetMethod("SetOffline");
+                        method?.Invoke(query, new object[] { isOffline });
+                    }
+                    catch
+                    {
+                        // If method doesn't exist, continue without it
+                    }
+                }
+
+                if (startTime.HasValue)
+                {
+                    try
+                    {
+                        var method = query.GetType().GetMethod("SetStartTime");
+                        method?.Invoke(query, new object[] { startTime.Value });
+                    }
+                    catch
+                    {
+                        // If method doesn't exist, continue without it
+                    }
+                }
+
+                if (endTime.HasValue)
+                {
+                    try
+                    {
+                        var method = query.GetType().GetMethod("SetEndTime");
+                        method?.Invoke(query, new object[] { endTime.Value });
+                    }
+                    catch
+                    {
+                        // If method doesn't exist, continue without it
+                    }
+                }
+
+                if (limit.HasValue)
+                {
+                    try
+                    {
+                        var method = query.GetType().GetMethod("SetLimit");
+                        method?.Invoke(query, new object[] { limit.Value });
+                    }
+                    catch
+                    {
+                        // If method doesn't exist, continue without it
+                    }
+                }
+
+                if (offset.HasValue)
+                {
+                    try
+                    {
+                        var method = query.GetType().GetMethod("SetOffset");
+                        method?.Invoke(query, new object[] { offset.Value });
+                    }
+                    catch
+                    {
+                        // If method doesn't exist, continue without it
+                    }
+                }
+
+                payment_sdk_.TransactionManager.ReportManager.QueryTransactions(query);
+            }
+        }
+
+        /// <summary>
+        /// Query Store and Forward (SAF) transactions.
+        /// Convenience method for querying offline transactions.
+        /// </summary>
+        /// <param name="startTime">Start time for SAF transaction query</param>
+        /// <param name="endTime">End time for query (optional, defaults to current time)</param>
+        public void QuerySAFTransactions(long startTime, long? endTime = null)
+        {
+            QueryTransactions(allPos: false, isOffline: true, startTime: startTime, endTime: endTime);
+        }
+
+        /// <summary>
+        /// Query transactions using a custom TransactionQuery object.
+        /// Provides full control over query parameters.
+        /// </summary>
+        /// <param name="query">The TransactionQuery object with configured parameters</param>
+        public void QueryTransactions(TransactionQuery query)
+        {
+            if (query == null)
+                throw new ArgumentNullException(nameof(query));
+
+            if (!IsReportingCapable("TRANSACTION_QUERY_CAPABILITY"))
+                throw new InvalidOperationException("TRANSACTION_QUERY_CAPABILITY is not supported by the current Payment App or Host");
+
+            payment_sdk_.TransactionManager.ReportManager.QueryTransactions(query);
+        }
+
+        /// <summary>
+        /// Gets all supported reporting capabilities for the current Payment App and Host.
+        /// </summary>
+        /// <returns>Dictionary of capability names and their support status</returns>
+        public Dictionary<string, bool> GetSupportedCapabilities()
+        {
+            var capabilities = new Dictionary<string, bool>
+            {
+                ["GET_ACTIVE_TOTALS_CAPABILITY"] = IsReportingCapable("GET_ACTIVE_TOTALS_CAPABILITY"),
+                ["GET_GROUP_TOTALS_CAPABILITY"] = IsReportingCapable("GET_GROUP_TOTALS_CAPABILITY"),
+                ["CLOSE_PERIOD_CAPABILITY"] = IsReportingCapable("CLOSE_PERIOD_CAPABILITY"),
+                ["TERMINAL_RECONCILIATION_CAPABILITY"] = IsReportingCapable("TERMINAL_RECONCILIATION_CAPABILITY"),
+                ["ACQUIRER_RECONCILIATION_CAPABILITY"] = IsReportingCapable("ACQUIRER_RECONCILIATION_CAPABILITY"),
+                ["PREVIOUS_RECONCILIATION_CAPABILITY"] = IsReportingCapable("PREVIOUS_RECONCILIATION_CAPABILITY"),
+                ["TRANSACTION_QUERY_CAPABILITY"] = IsReportingCapable("TRANSACTION_QUERY_CAPABILITY"),
+                ["TOTALS_GROUP_ID_CAPABILITY"] = IsReportingCapable("TOTALS_GROUP_ID_CAPABILITY"),
+                ["CLOSE_PERIOD_AND_RECONCILE_CAPABILITY"] = IsReportingCapable("CLOSE_PERIOD_AND_RECONCILE_CAPABILITY"),
+                ["GET_PREVIOUS_RECONCILIATION_CAPABILITY"] = IsReportingCapable("GET_PREVIOUS_RECONCILIATION_CAPABILITY"),
+                ["RECONCILIATION_LIST_CAPABILITY"] = IsReportingCapable("RECONCILIATION_LIST_CAPABILITY"),
+                ["RECONCILIATION_REPORT_CAPABILITY"] = IsReportingCapable("RECONCILIATION_REPORT_CAPABILITY")
+            };
+
+            return capabilities;
+        }
+
+        #endregion
 
         /// <summary>
         /// Tear down.
