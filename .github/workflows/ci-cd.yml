@@ -113,119 +113,72 @@ jobs:
         Write-Host "Build completed in $duration seconds"
       shell: powershell
 
-    - name: Run Tests with Custom Script
+    - name: Run Tests with VSTest
       run: |
-        if (Test-Path "scripts\test.ps1") {
-          Write-Host "Running tests with custom test script..."
-          .\scripts\test.ps1 -Configuration ${{ env.BUILD_CONFIGURATION }} -TestCategory Unit
+        Write-Host "Running unit tests with VSTest..."
+        
+        # Ensure TestResults directory exists
+        New-Item -ItemType Directory -Force -Path "TestResults" | Out-Null
+        
+        # Find the proper unit test assembly
+        $testAssembly = "VerifonePayment.UnitTests\bin\${{ env.BUILD_CONFIGURATION }}\VerifonePayment.UnitTests.dll"
+        
+        if (Test-Path $testAssembly) {
+          Write-Host "Found test assembly: $testAssembly"
           
-          # Ensure TestResults directory exists even if no tests ran
-          if (-not (Test-Path "TestResults")) {
-            New-Item -ItemType Directory -Force -Path "TestResults" | Out-Null
-            Write-Host "Created TestResults directory"
-          }
+          # Find VSTest console executable
+          $vstestPaths = @(
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\TestPlatform\vstest.console.exe",
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\Common7\IDE\Extensions\TestPlatform\vstest.console.exe",
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\TestPlatform\vstest.console.exe"
+          )
           
-          # Check if any test result files were created
-          $trxFiles = Get-ChildItem -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
-          if ($trxFiles.Count -eq 0) {
-            Write-Host "No TRX files found, creating placeholder result..."
+          $vstest = $vstestPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          
+          if ($vstest) {
+            Write-Host "Running tests with VSTest: $vstest"
             
-            # Create a minimal test result file for the reporter
-            $guid1 = [System.Guid]::NewGuid().ToString()
-            $guid2 = [System.Guid]::NewGuid().ToString()
-            $timestamp = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK'
+            # Run tests with TRX logger for CI/CD reporting
+            & $vstest $testAssembly `
+              /TestAdapterPath:"packages\MSTest.TestAdapter.3.1.1\build\net462" `
+              /Logger:trx `
+              /ResultsDirectory:TestResults `
+              /Framework:.NETFramework,Version=v4.8 `
+              /Platform:x64 `
+              /InIsolation `
+              /Parallel
             
-            $placeholderContent = '<?xml version="1.0" encoding="utf-8"?>' + "`n"
-            $placeholderContent += '<TestRun id="' + $guid1 + '" name="Placeholder Test Run" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">' + "`n"
-            $placeholderContent += '  <Times creation="' + $timestamp + '" queuing="' + $timestamp + '" start="' + $timestamp + '" finish="' + $timestamp + '" />' + "`n"
-            $placeholderContent += '  <Results></Results>' + "`n"
-            $placeholderContent += '  <TestDefinitions></TestDefinitions>' + "`n"
-            $placeholderContent += '  <TestEntries></TestEntries>' + "`n"
-            $placeholderContent += '  <TestLists></TestLists>' + "`n"
-            $placeholderContent += '  <ResultSummary outcome="Completed">' + "`n"
-            $placeholderContent += '    <Counters total="0" executed="0" passed="0" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />' + "`n"
-            $placeholderContent += '  </ResultSummary>' + "`n"
-            $placeholderContent += '</TestRun>'
+            # VSTest returns non-zero exit code if any tests fail, but we want to continue
+            # to process results, so we capture but don't fail the build here
+            $testExitCode = $LASTEXITCODE
+            Write-Host "Test execution completed with exit code: $testExitCode"
             
-            $placeholderContent | Out-File -FilePath "TestResults\placeholder.trx" -Encoding utf8
-            Write-Host "Created placeholder test result file"
+            # List generated test result files
+            $trxFiles = Get-ChildItem -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
+            Write-Host "Generated TRX files: $($trxFiles.Count)"
+            foreach ($trxFile in $trxFiles) {
+              Write-Host "  - $($trxFile.Name) ($($trxFile.Length) bytes)"
+            }
+            
+          } else {
+            Write-Host "VSTest not found! Available Visual Studio installations:"
+            $vsInstallations = Get-ChildItem -Path "${env:ProgramFiles}\Microsoft Visual Studio\2022" -ErrorAction SilentlyContinue
+            foreach ($installation in $vsInstallations) {
+              Write-Host "  - $($installation.Name)"
+            }
+            throw "VSTest console runner not found"
           }
         } else {
-          Write-Host "No custom test script found, running basic test discovery..."
-          
-          # Ensure TestResults directory exists
-          New-Item -ItemType Directory -Force -Path "TestResults" | Out-Null
-          
-          $testAssemblies = Get-ChildItem -Path . -Recurse -Include "*Test*.dll", "*Tests*.dll" | 
-                           Where-Object { 
-                               $_.Directory.Name -eq "bin" -and 
-                               $_.Directory.Parent.Name -eq "${{ env.BUILD_CONFIGURATION }}" -and
-                               $_.Name -notmatch "TestAdapter|TestHost|Microsoft\.|System\."
-                           }
-          
-          Write-Host "Found $($testAssemblies.Count) potential test assemblies"
-          
-          if ($testAssemblies.Count -gt 0) {
-            foreach ($assembly in $testAssemblies) {
-              Write-Host "Testing: $($assembly.Name)"
-              $testName = [System.IO.Path]::GetFileNameWithoutExtension($assembly.Name)
-              
-              # Try to find VSTest
-              $vstestPaths = @(
-                "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\TestPlatform\vstest.console.exe",
-                "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\Common7\IDE\Extensions\TestPlatform\vstest.console.exe",
-                "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\TestPlatform\vstest.console.exe"
-              )
-              
-              $vstest = $vstestPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-              
-              if ($vstest) {
-                Write-Host "Running tests with VSTest: $vstest"
-                & $vstest $assembly.FullName `
-                  /Logger:trx `
-                  /ResultsDirectory:TestResults `
-                  /Framework:.NETFramework,Version=v4.7.2 `
-                  /Platform:x64 `
-                  /InIsolation
-                
-                if ($LASTEXITCODE -ne 0) {
-                  Write-Host "VSTest returned exit code: $LASTEXITCODE"
-                }
-              } else {
-                Write-Host "VSTest not found, skipping test execution"
-              }
-            }
-          } else {
-            Write-Host "No test assemblies found, creating placeholder result"
-            
-            # Create placeholder result
-            $guid3 = [System.Guid]::NewGuid().ToString()
-            $timestamp2 = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK'
-            
-            $placeholderXml = '<?xml version="1.0" encoding="utf-8"?>' + "`n"
-            $placeholderXml += '<TestRun id="' + $guid3 + '" name="No Tests Found" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">' + "`n"
-            $placeholderXml += '  <Times creation="' + $timestamp2 + '" queuing="' + $timestamp2 + '" start="' + $timestamp2 + '" finish="' + $timestamp2 + '" />' + "`n"
-            $placeholderXml += '  <Results></Results>' + "`n"
-            $placeholderXml += '  <TestDefinitions></TestDefinitions>' + "`n"
-            $placeholderXml += '  <TestEntries></TestEntries>' + "`n"
-            $placeholderXml += '  <TestLists></TestLists>' + "`n"
-            $placeholderXml += '  <ResultSummary outcome="Completed">' + "`n"
-            $placeholderXml += '    <Counters total="0" executed="0" passed="0" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />' + "`n"
-            $placeholderXml += '  </ResultSummary>' + "`n"
-            $placeholderXml += '</TestRun>'
-            
-            $placeholderXml | Out-File -FilePath "TestResults\no-tests-found.trx" -Encoding utf8
+          Write-Host "Test assembly not found at: $testAssembly"
+          Write-Host "Available files in VerifonePayment.UnitTests\bin\${{ env.BUILD_CONFIGURATION }}:"
+          $files = Get-ChildItem -Path "VerifonePayment.UnitTests\bin\${{ env.BUILD_CONFIGURATION }}" -ErrorAction SilentlyContinue
+          foreach ($file in $files) {
+            Write-Host "  - $($file.Name)"
           }
-        }
-        
-        # Verify test results exist
-        $finalTrxFiles = Get-ChildItem -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
-        Write-Host "Final TRX files found: $($finalTrxFiles.Count)"
-        foreach ($trxFile in $finalTrxFiles) {
-          Write-Host "  - $($trxFile.Name) ($($trxFile.Length) bytes)"
+          throw "Test assembly not found"
         }
       shell: powershell
-      continue-on-error: true
+      continue-on-error: false
 
     - name: Publish Test Results
       uses: dorny/test-reporter@v1
