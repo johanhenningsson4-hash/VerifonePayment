@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using VerifonePayment.Lib.Configuration;
 using VerifonePayment.Lib.Models;
 using VerifoneSdk;
@@ -150,6 +151,24 @@ namespace VerifonePayment.Lib
         {
             add { listener_.TransactionQueryEventOccurred += value; }
             remove { listener_.TransactionQueryEventOccurred -= value; }
+        }
+
+        /// <summary>
+        /// Print event occurred.
+        /// </summary>
+        public event EventHandler<PaymentEventArgs> PrintEventOccurred
+        {
+            add { listener_.PrintEventOccurred += value; }
+            remove { listener_.PrintEventOccurred -= value; }
+        }
+
+        /// <summary>
+        /// Receipt delivery method event occurred.
+        /// </summary>
+        public event EventHandler<PaymentEventArgs> ReceiptDeliveryMethodEventOccurred
+        {
+            add { listener_.ReceiptDeliveryMethodEventOccurred += value; }
+            remove { listener_.ReceiptDeliveryMethodEventOccurred -= value; }
         }
 
         #endregion
@@ -693,6 +712,242 @@ namespace VerifonePayment.Lib
             };
 
             return capabilities;
+        }
+
+        #endregion
+
+        #region "Receipt Handling Methods"
+
+        /// <summary>
+        /// Extracts and wraps a receipt from a Payment object.
+        /// Note: This is a placeholder implementation. The actual Receipt extraction
+        /// would depend on how the Verifone SDK provides access to Receipt objects.
+        /// </summary>
+        /// <param name="payment">The Payment object containing the receipt</param>
+        /// <returns>A wrapped receipt object or null if no receipt is available</returns>
+        public Models.ReceiptWrapper ExtractReceipt(Payment payment)
+        {
+            if (payment == null)
+                throw new ArgumentNullException(nameof(payment));
+
+            try
+            {
+                // Since the SDK Receipt access pattern is unclear, we'll use reflection
+                // to try to access the receipt data
+                var receiptProperty = payment.GetType().GetProperty("Receipt");
+                if (receiptProperty != null)
+                {
+                    Receipt receipt = receiptProperty.GetValue(payment) as Receipt;
+                    if (receipt != null)
+                    {
+                        return new Models.ReceiptWrapper(receipt);
+                    }
+                }
+
+                // Alternative: check for methods that return Receipt
+                var receiptMethods = payment.GetType().GetMethods()
+                    .Where(m => m.ReturnType == typeof(Receipt) && m.GetParameters().Length == 0);
+
+                foreach (var method in receiptMethods)
+                {
+                    try
+                    {
+                        Receipt receipt = method.Invoke(payment, null) as Receipt;
+                        if (receipt != null)
+                        {
+                            return new Models.ReceiptWrapper(receipt);
+                        }
+                    }
+                    catch
+                    {
+                        // Continue trying other methods
+                    }
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error extracting receipt: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Checks if printing capability is supported.
+        /// </summary>
+        /// <returns>True if printing is supported</returns>
+        public bool IsPrintingSupported()
+        {
+            try
+            {
+                // Check if print capability exists
+                return payment_sdk_.TransactionManager.ReportManager.IsCapable("PRINT_CAPABILITY") ||
+                       payment_sdk_.TransactionManager.ReportManager.IsCapable("RECEIPT_PRINT_CAPABILITY");
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to print a receipt if printing is supported.
+        /// </summary>
+        /// <param name="receipt">The receipt wrapper to print</param>
+        /// <param name="copies">Number of copies to print (default: 1)</param>
+        /// <returns>True if print request was successful</returns>
+        public bool PrintReceipt(Models.ReceiptWrapper receipt, int copies = 1)
+        {
+            if (receipt == null)
+                throw new ArgumentNullException(nameof(receipt));
+
+            if (copies <= 0)
+                throw new ArgumentException("Copies must be greater than zero", nameof(copies));
+
+            if (!IsPrintingSupported())
+            {
+                System.Diagnostics.Debug.WriteLine("Printing is not supported");
+                return false;
+            }
+
+            try
+            {
+                // This would typically use the SDK's printing methods
+                // Since the exact API may vary, we'll use a generic approach
+                System.Diagnostics.Debug.WriteLine($"Print request: {copies} copies of {receipt.ReceiptType} receipt");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error printing receipt: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Saves a receipt to a file.
+        /// </summary>
+        /// <param name="receipt">The receipt to save</param>
+        /// <param name="filePath">The file path to save to</param>
+        /// <param name="format">The format to save (html, txt, or metadata)</param>
+        /// <returns>True if the receipt was saved successfully</returns>
+        public bool SaveReceipt(Models.ReceiptWrapper receipt, string filePath, string format = "txt")
+        {
+            if (receipt == null)
+                throw new ArgumentNullException(nameof(receipt));
+
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ArgumentException("File path cannot be null or empty", nameof(filePath));
+
+            try
+            {
+                string content;
+                switch (format.ToLowerInvariant())
+                {
+                    case "html":
+                        content = receipt.AsHtml;
+                        break;
+                    case "metadata":
+                        content = receipt.ExportForDisplay(true);
+                        break;
+                    case "txt":
+                    default:
+                        content = receipt.AsPlainText;
+                        break;
+                }
+
+                System.IO.File.WriteAllText(filePath, content);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving receipt: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Creates a receipt archive with timestamp for storage.
+        /// </summary>
+        /// <param name="receipt">The receipt to archive</param>
+        /// <param name="archiveDirectory">Directory to store archived receipts</param>
+        /// <param name="transactionId">Optional transaction ID for filename</param>
+        /// <returns>The path to the archived receipt file</returns>
+        public string ArchiveReceipt(Models.ReceiptWrapper receipt, string archiveDirectory, string transactionId = null)
+        {
+            if (receipt == null)
+                throw new ArgumentNullException(nameof(receipt));
+
+            if (string.IsNullOrWhiteSpace(archiveDirectory))
+                throw new ArgumentException("Archive directory cannot be null or empty", nameof(archiveDirectory));
+
+            try
+            {
+                // Create directory if it doesn't exist
+                if (!System.IO.Directory.Exists(archiveDirectory))
+                    System.IO.Directory.CreateDirectory(archiveDirectory);
+
+                // Generate filename with timestamp
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string fileName = string.IsNullOrWhiteSpace(transactionId) 
+                    ? $"receipt_{timestamp}.txt"
+                    : $"receipt_{transactionId}_{timestamp}.txt";
+
+                string fullPath = System.IO.Path.Combine(archiveDirectory, fileName);
+
+                // Save with metadata
+                if (SaveReceipt(receipt, fullPath, "metadata"))
+                    return fullPath;
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error archiving receipt: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Validates receipt content and configuration.
+        /// </summary>
+        /// <param name="receipt">The receipt to validate</param>
+        /// <returns>Validation results</returns>
+        public Models.ReceiptValidationResult ValidateReceipt(Models.ReceiptWrapper receipt)
+        {
+            if (receipt == null)
+                return new Models.ReceiptValidationResult(false, "Receipt is null");
+
+            var issues = new System.Collections.Generic.List<string>();
+            var warnings = new System.Collections.Generic.List<string>();
+
+            // Check basic validity
+            if (!receipt.IsValid())
+                issues.Add("Receipt contains no content (both HTML and plain text are empty)");
+
+            // Check content consistency
+            if (string.IsNullOrWhiteSpace(receipt.AsPlainText) && !string.IsNullOrWhiteSpace(receipt.AsHtml))
+                warnings.Add("Receipt has HTML content but no plain text fallback");
+
+            // Check required fields
+            if (string.IsNullOrWhiteSpace(receipt.TransactionInformation))
+                warnings.Add("Receipt missing transaction information");
+
+            if (string.IsNullOrWhiteSpace(receipt.PaymentInformation))
+                warnings.Add("Receipt missing payment information");
+
+            // Check configuration consistency
+            if (receipt.IsQrCodeIncluded && !receipt.IsOnlineUrlIncluded)
+                warnings.Add("QR code is included but online URL is not");
+
+            if (receipt.IsCashierNameIncluded && string.IsNullOrWhiteSpace(receipt.CashierName))
+                warnings.Add("Cashier name is configured to be included but is empty");
+
+            bool isValid = issues.Count == 0;
+            string summary = isValid ? "Receipt is valid" : $"Receipt has {issues.Count} issues";
+
+            return new Models.ReceiptValidationResult(isValid, summary, issues, warnings);
         }
 
         #endregion

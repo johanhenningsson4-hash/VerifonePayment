@@ -56,7 +56,7 @@
       <HintPath>Dlls\PaymentSdk.dll</HintPath>
     </Reference>
     <Reference Include="System" />
-	<Reference Include="System.Configuration" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -69,6 +69,8 @@
     <Compile Include="Configuration\PaymentConfiguration.cs" />
     <Compile Include="Enums\Enums.cs" />
     <Compile Include="Models\PaymentEventArgs.cs" />
+    <Compile Include="Models\ReceiptValidationResult.cs" />
+    <Compile Include="Models\ReceiptWrapper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="VerifonePayment.cs" />
     <Compile Include="VerifonePaymentListener.cs" />

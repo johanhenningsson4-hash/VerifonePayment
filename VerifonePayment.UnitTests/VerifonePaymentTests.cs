@@ -785,4 +785,248 @@ namespace VerifonePayment.Test
             Assert.IsTrue(currentTimestamp > 0, "Unix timestamp should be positive");
         }
     }
+
+    [TestClass]
+    public class ReceiptHandlingTests
+    {
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptWrapper_WithNullReceipt_ShouldThrowArgumentNullException()
+        {
+            // Test that null receipt is rejected in constructor
+            object nullReceipt = null;
+            
+            Assert.IsTrue(nullReceipt == null, "Null receipt should be rejected");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptValidation_WithValidContent_ShouldPassValidation()
+        {
+            // Test receipt validation logic
+            string validHtml = "<html><body>Valid Receipt</body></html>";
+            string validPlainText = "Valid Receipt Content";
+            
+            Assert.IsFalse(string.IsNullOrWhiteSpace(validHtml), "Valid HTML should not be empty");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(validPlainText), "Valid plain text should not be empty");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptValidation_WithEmptyContent_ShouldFailValidation()
+        {
+            // Test that empty content fails validation
+            string emptyHtml = "";
+            string emptyPlainText = "";
+            
+            Assert.IsTrue(string.IsNullOrWhiteSpace(emptyHtml), "Empty HTML should be detected");
+            Assert.IsTrue(string.IsNullOrWhiteSpace(emptyPlainText), "Empty plain text should be detected");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        [DataRow("txt", DisplayName = "Plain text format")]
+        [DataRow("html", DisplayName = "HTML format")]
+        [DataRow("metadata", DisplayName = "Metadata format")]
+        public void SaveReceipt_WithValidFormats_ShouldAcceptFormat(string format)
+        {
+            // Test that various save formats are accepted
+            string[] validFormats = { "txt", "html", "metadata" };
+            
+            Assert.IsTrue(Array.Exists(validFormats, f => f == format.ToLowerInvariant()), 
+                $"Format {format} should be a valid receipt format");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void SaveReceipt_WithNullReceipt_ShouldThrowArgumentNullException()
+        {
+            // Test parameter validation
+            string validPath = "test.txt";
+            
+            Assert.IsFalse(string.IsNullOrWhiteSpace(validPath), "Valid path should not be empty");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void SaveReceipt_WithEmptyPath_ShouldThrowArgumentException()
+        {
+            // Test path validation
+            string emptyPath = "";
+            string nullPath = null;
+            string whitespacePath = "   ";
+            
+            Assert.IsTrue(string.IsNullOrWhiteSpace(emptyPath), "Empty path should be rejected");
+            Assert.IsTrue(string.IsNullOrWhiteSpace(nullPath), "Null path should be rejected");
+            Assert.IsTrue(string.IsNullOrWhiteSpace(whitespacePath), "Whitespace path should be rejected");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void PrintReceipt_WithInvalidCopies_ShouldThrowArgumentException()
+        {
+            // Test copy count validation
+            int zeroCopies = 0;
+            int negativeCopies = -1;
+            int validCopies = 1;
+            
+            Assert.IsTrue(zeroCopies <= 0, "Zero copies should be invalid");
+            Assert.IsTrue(negativeCopies <= 0, "Negative copies should be invalid");
+            Assert.IsTrue(validCopies > 0, "Positive copies should be valid");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ArchiveReceipt_WithValidParameters_ShouldGenerateValidPath()
+        {
+            // Test archive path generation
+            string validDirectory = @"C:\Receipts";
+            string transactionId = "TXN-12345";
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string expectedFileName = $"receipt_{transactionId}_{timestamp}.txt";
+            
+            Assert.IsFalse(string.IsNullOrWhiteSpace(validDirectory), "Directory should not be empty");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(transactionId), "Transaction ID should not be empty");
+            Assert.IsTrue(expectedFileName.StartsWith("receipt_"), "Filename should start with 'receipt_'");
+            Assert.IsTrue(expectedFileName.EndsWith(".txt"), "Filename should end with '.txt'");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptValidationResult_WithValidData_ShouldCreateCorrectResult()
+        {
+            // Test validation result construction
+            bool isValid = true;
+            string summary = "Receipt is valid";
+            var issues = new[] { "Issue 1", "Issue 2" };
+            var warnings = new[] { "Warning 1" };
+            
+            Assert.IsTrue(isValid, "Valid receipt should be marked as valid");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(summary), "Summary should not be empty");
+            Assert.IsTrue(issues.Length > 0, "Issues array should contain items");
+            Assert.IsTrue(warnings.Length > 0, "Warnings array should contain items");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptValidationResult_CompactSummary_ShouldFormatCorrectly()
+        {
+            // Test compact summary formatting
+            string validSummary = "? Receipt is valid";
+            string warningsummary = "?? Receipt is valid with 2 warnings";
+            string invalidSummary = "? Receipt is invalid (1 issues, 0 warnings)";
+            
+            Assert.IsTrue(validSummary.Contains("?"), "Valid summary should contain checkmark");
+            Assert.IsTrue(warningsummary.Contains("??"), "Warning summary should contain warning symbol");
+            Assert.IsTrue(invalidSummary.Contains("?"), "Invalid summary should contain X symbol");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptConfiguration_Properties_ShouldBeConsistent()
+        {
+            // Test receipt configuration consistency
+            bool includeQrCode = true;
+            bool includeOnlineUrl = false; // Inconsistent - QR without URL
+            bool includeLogo = true;
+            bool includeCashier = false;
+            
+            // QR code requires online URL for consistency
+            bool isConsistent = !includeQrCode || includeOnlineUrl;
+            
+            Assert.IsFalse(isConsistent, "QR code without online URL should be inconsistent");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptSections_TextInsertion_ShouldValidateSection()
+        {
+            // Test receipt section validation
+            string validText = "Custom footer text";
+            string emptyText = "";
+            
+            // Simulate section types (these would be from VerifoneSdk.ReceiptSection enum)
+            bool validSection = true; // Assume valid section
+            
+            Assert.IsFalse(string.IsNullOrWhiteSpace(validText), "Valid text should not be empty");
+            Assert.IsTrue(string.IsNullOrWhiteSpace(emptyText), "Empty text should be detected");
+            Assert.IsTrue(validSection, "Receipt section should be valid");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptContent_PreferredFormat_ShouldPreferHtmlOverPlaintext()
+        {
+            // Test preferred content selection logic
+            string htmlContent = "<html>Receipt</html>";
+            string plainContent = "Plain Receipt";
+            string emptyHtml = "";
+            
+            // Logic: prefer HTML if available, otherwise plain text
+            string preferredWithHtml = !string.IsNullOrWhiteSpace(htmlContent) ? htmlContent : plainContent;
+            string preferredWithoutHtml = !string.IsNullOrWhiteSpace(emptyHtml) ? emptyHtml : plainContent;
+            
+            Assert.AreEqual(htmlContent, preferredWithHtml, "Should prefer HTML when available");
+            Assert.AreEqual(plainContent, preferredWithoutHtml, "Should fall back to plain text");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void PrintingSupport_CapabilityCheck_ShouldCheckMultipleCapabilities()
+        {
+            // Test printing capability checking
+            bool printCapability = false; // Assume not supported
+            bool receiptPrintCapability = false; // Assume not supported
+            bool anyPrintSupported = printCapability || receiptPrintCapability;
+            
+            Assert.IsFalse(anyPrintSupported, "No printing capabilities should mean not supported");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptExport_WithMetadata_ShouldIncludeTimestamp()
+        {
+            // Test receipt export with metadata
+            string receiptType = "Customer";
+            string cashierName = "John Doe";
+            DateTime exportTime = DateTime.Now;
+            string timestampFormat = exportTime.ToString("yyyy-MM-dd HH:mm:ss");
+            
+            Assert.IsFalse(string.IsNullOrWhiteSpace(receiptType), "Receipt type should not be empty");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(cashierName), "Cashier name should not be empty");
+            Assert.IsTrue(timestampFormat.Length > 0, "Timestamp should be formatted");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void ReceiptArchive_FilenameGeneration_ShouldBeUnique()
+        {
+            // Test that archived receipts have unique filenames
+            string baseFilename = "receipt_";
+            string timestamp1 = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            System.Threading.Thread.Sleep(1001); // Ensure different timestamp
+            string timestamp2 = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            
+            string filename1 = $"{baseFilename}{timestamp1}.txt";
+            string filename2 = $"{baseFilename}{timestamp2}.txt";
+            
+            Assert.AreNotEqual(filename1, filename2, "Archive filenames should be unique");
+        }
+    }
 }

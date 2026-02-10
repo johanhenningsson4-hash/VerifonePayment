@@ -2,6 +2,7 @@
 using System.Configuration;
 using System.Threading;
 using System.Reflection;
+using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace VerifonePayment.Test
@@ -18,6 +19,8 @@ namespace VerifonePayment.Test
         private static ManualResetEvent refundCompletedEventReceived = new ManualResetEvent(false);
         private static ManualResetEvent reconciliationEventReceived = new ManualResetEvent(false);
         private static ManualResetEvent transactionQueryEventReceived = new ManualResetEvent(false);
+        private static ManualResetEvent printEventReceived = new ManualResetEvent(false);
+        private static ManualResetEvent receiptDeliveryEventReceived = new ManualResetEvent(false);
 
         // State management for workflow validation
         private static bool isSDKInitialized = false;
@@ -29,6 +32,7 @@ namespace VerifonePayment.Test
         private static bool isRefundEnabled = false;
         private static string lastPaymentId = null;
         private static decimal lastPaymentAmount = 0;
+        private static Lib.Models.ReceiptWrapper lastReceipt = null;
 
         #endregion
 
@@ -53,6 +57,8 @@ namespace VerifonePayment.Test
                 verifonePayment.RefundCompletedEventOccurred += VerifonePayment_RefundCompletedEventOccurred;
                 verifonePayment.ReconciliationEventOccurred += VerifonePayment_ReconciliationEventOccurred;
                 verifonePayment.TransactionQueryEventOccurred += VerifonePayment_TransactionQueryEventOccurred;
+                verifonePayment.PrintEventOccurred += VerifonePayment_PrintEventOccurred;
+                verifonePayment.ReceiptDeliveryMethodEventOccurred += VerifonePayment_ReceiptDeliveryMethodEventOccurred;
                 verifonePayment.CommerceEventOccurred += VerifonePayment_CommerceEventOccurred;
 
                 bool running = true;
@@ -72,8 +78,10 @@ namespace VerifonePayment.Test
                     Console.WriteLine("10. ClosePeriod (End of Day)");
                     Console.WriteLine("11. QueryTransactions");
                     Console.WriteLine("12. GetSupportedCapabilities");
-                    Console.WriteLine("13. TearDown");
-                    Console.WriteLine("14. Run Unit Tests");
+                    Console.WriteLine("13. TestReceiptHandling");
+                    Console.WriteLine("14. SaveLastReceipt");
+                    Console.WriteLine("15. TearDown");
+                    Console.WriteLine("16. Run Unit Tests");
                     Console.WriteLine("S. Show Workflow Status");
                     Console.WriteLine("0. Exit");
                     
@@ -355,6 +363,91 @@ namespace VerifonePayment.Test
                             break;
 
                         case "13":
+                            Console.WriteLine("Testing receipt handling capabilities...");
+                            try
+                            {
+                                Console.WriteLine($"Printing supported: {(verifonePayment.IsPrintingSupported() ? "✓" : "✗")}");
+                                
+                                if (lastReceipt != null)
+                                {
+                                    Console.WriteLine("\n--- Last Receipt Information ---");
+                                    Console.WriteLine(lastReceipt.GetReceiptSummary());
+                                    Console.WriteLine();
+
+                                    var validation = verifonePayment.ValidateReceipt(lastReceipt);
+                                    Console.WriteLine(validation.GetCompactSummary());
+                                    
+                                    if (validation.HasIssues || validation.HasWarnings)
+                                    {
+                                        Console.WriteLine("\nValidation Details:");
+                                        Console.WriteLine(validation.GetDetailedReport());
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("⚠️ No receipt available. Complete a payment transaction first.");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"❌ Error testing receipt handling: {ex.Message}");
+                            }
+                            break;
+
+                        case "14":
+                            if (lastReceipt == null)
+                            {
+                                Console.WriteLine("❌ No receipt available to save. Complete a payment transaction first.");
+                                break;
+                            }
+                            Console.WriteLine("Saving last receipt...");
+                            try
+                            {
+                                Console.WriteLine("Choose format:");
+                                Console.WriteLine("1. Plain text");
+                                Console.WriteLine("2. HTML");
+                                Console.WriteLine("3. Full metadata");
+                                Console.Write("Select format (1, 2, or 3): ");
+                                var formatChoice = Console.ReadLine();
+
+                                string format = "txt";
+                                string extension = "txt";
+                                switch (formatChoice)
+                                {
+                                    case "2":
+                                        format = "html";
+                                        extension = "html";
+                                        break;
+                                    case "3":
+                                        format = "metadata";
+                                        extension = "txt";
+                                        break;
+                                    case "1":
+                                    default:
+                                        format = "txt";
+                                        extension = "txt";
+                                        break;
+                                }
+
+                                string fileName = $"receipt_{DateTime.Now:yyyyMMdd_HHmmss}.{extension}";
+                                string filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), fileName);
+
+                                if (verifonePayment.SaveReceipt(lastReceipt, filePath, format))
+                                {
+                                    Console.WriteLine($"✓ Receipt saved to: {filePath}");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("❌ Failed to save receipt");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"❌ Error saving receipt: {ex.Message}");
+                            }
+                            break;
+
+                        case "15":
                             Console.WriteLine("Tearing down SDK...");
                             verifonePayment.TearDown();
                             WaitForEvent(statusEventReceived, "TearDown");
@@ -368,10 +461,11 @@ namespace VerifonePayment.Test
                             isRefundEnabled = false;
                             lastPaymentId = null;
                             lastPaymentAmount = 0;
+                            lastReceipt = null;
                             Console.WriteLine("✓ SDK teardown completed");
                             break;
 
-                        case "14":
+                        case "16":
                             RunUnitTests();
                             break;
 
@@ -426,11 +520,18 @@ namespace VerifonePayment.Test
             Console.WriteLine($"Payment Enabled: {(isPaymentEnabled ? "✓" : "✗")}");
             Console.WriteLine($"Has Completed Payment: {(hasCompletedPayment ? "✓" : "✗")}");
             Console.WriteLine($"Refund Enabled: {(isRefundEnabled ? "✓" : "✗")}");
+            Console.WriteLine($"Has Receipt: {(lastReceipt != null ? "✓" : "✗")}");
             
             if (!string.IsNullOrEmpty(lastPaymentId))
             {
                 Console.WriteLine($"Last Payment ID: {lastPaymentId}");
                 Console.WriteLine($"Last Payment Amount: {lastPaymentAmount:F2} EUR");
+            }
+
+            if (lastReceipt != null)
+            {
+                Console.WriteLine($"Receipt Type: {lastReceipt.ReceiptType}");
+                Console.WriteLine($"Receipt Valid: {(lastReceipt.IsValid() ? "✓" : "✗")}");
             }
             
             if (isPaymentEnabled)
@@ -606,6 +707,48 @@ namespace VerifonePayment.Test
             }
             
             transactionQueryEventReceived.Set();
+        }
+
+        /// <summary>
+        /// Event handler for PrintEventOccurred
+        /// </summary>
+        /// <param name="sender">The sender</param>
+        /// <param name="e">The event arguments</param>
+        private static void VerifonePayment_PrintEventOccurred(object sender, Lib.Models.PaymentEventArgs e)
+        {
+            Console.WriteLine($"   - Print Event Status: {e.Status}, Type: {e.Type}, Message: {e.Message}");
+            
+            if (e.Status == "0") // Success
+            {
+                Console.WriteLine("✓ Print event completed successfully");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Print event issue: Status {e.Status}");
+            }
+            
+            printEventReceived.Set();
+        }
+
+        /// <summary>
+        /// Event handler for ReceiptDeliveryMethodEventOccurred
+        /// </summary>
+        /// <param name="sender">The sender</param>
+        /// <param name="e">The event arguments</param>
+        private static void VerifonePayment_ReceiptDeliveryMethodEventOccurred(object sender, Lib.Models.PaymentEventArgs e)
+        {
+            Console.WriteLine($"   - Receipt Delivery Status: {e.Status}, Type: {e.Type}, Message: {e.Message}");
+            
+            if (e.Status == "0") // Success
+            {
+                Console.WriteLine("✓ Receipt delivery method completed successfully");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Receipt delivery issue: Status {e.Status}");
+            }
+            
+            receiptDeliveryEventReceived.Set();
         }
 
         /// <summary>
