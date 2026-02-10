@@ -116,6 +116,15 @@ namespace VerifonePayment.Lib
             remove { listener_.CommerceEventOccurred -= value; }
         }
 
+        /// <summary>
+        /// Refund completed event occurred.
+        /// </summary>
+        public event EventHandler<PaymentEventArgs> RefundCompletedEventOccurred
+        {
+            add { listener_.RefundCompletedEventOccurred += value; }
+            remove { listener_.RefundCompletedEventOccurred -= value; }
+        }
+
         #endregion
 
         #region "Properties"
@@ -361,6 +370,83 @@ namespace VerifonePayment.Lib
 
                 payment_sdk_.TransactionManager.StartPayment(payment);
             }
+        }
+
+        /// <summary>
+        /// Process a linked refund with reference to the original payment.
+        /// </summary>
+        /// <param name="originalPaymentId">The original payment ID to link to</param>
+        /// <param name="refundAmount">The amount to refund (null for full refund)</param>
+        /// <param name="currency">The currency</param>
+        /// <param name="scale">The decimal scale</param>
+        public void ProcessLinkedRefund(string originalPaymentId, decimal? refundAmount = null, string currency = "EUR", int scale = 2)
+        {
+            if (string.IsNullOrWhiteSpace(originalPaymentId))
+                throw new ArgumentException("Original payment ID cannot be null or empty", nameof(originalPaymentId));
+
+            using (Payment refundPayment = Payment.Create())
+            {
+                // Link to original payment
+                refundPayment.LocalPaymentId = originalPaymentId;
+                refundPayment.Invoice = $"REFUND-{originalPaymentId}-{DateTime.Now:yyyyMMddHHmmss}";
+                refundPayment.Currency = currency;
+
+                // Set refund amount if specified (for partial refunds)
+                if (refundAmount.HasValue)
+                {
+                    decimal amount = refundAmount.Value;
+                    VerifoneSdk.Decimal requestedAmount = VerifoneSdk.Decimal.FromDecimal(ref amount);
+                    using (AmountTotals total = AmountTotals.Create(true))
+                    {
+                        total.Total = requestedAmount;
+                        refundPayment.RequestedAmounts = total;
+                    }
+                }
+                // If refundAmount is null, it will refund the entire original amount
+
+                payment_sdk_.TransactionManager.ProcessRefund(refundPayment);
+            }
+        }
+
+        /// <summary>
+        /// Process an unlinked refund (standalone refund without reference to original payment).
+        /// </summary>
+        /// <param name="refundAmount">The amount to refund</param>
+        /// <param name="currency">The currency</param>
+        /// <param name="invoiceId">Optional invoice ID for the refund</param>
+        /// <param name="scale">The decimal scale</param>
+        public void ProcessUnlinkedRefund(decimal refundAmount, string currency = "EUR", string invoiceId = null, int scale = 2)
+        {
+            if (refundAmount <= 0)
+                throw new ArgumentException("Refund amount must be greater than zero", nameof(refundAmount));
+
+            decimal amount = refundAmount;
+            VerifoneSdk.Decimal requestedAmount = VerifoneSdk.Decimal.FromDecimal(ref amount);
+
+            using (Payment refundPayment = Payment.Create())
+            using (AmountTotals total = AmountTotals.Create(true))
+            {
+                refundPayment.LocalPaymentId = invoiceId ?? $"UNLINKED-REFUND-{DateTime.Now:yyyyMMddHHmmss}";
+                refundPayment.Invoice = refundPayment.LocalPaymentId;
+                refundPayment.Currency = currency;
+                
+                total.Total = requestedAmount;
+                refundPayment.RequestedAmounts = total;
+
+                payment_sdk_.TransactionManager.ProcessRefund(refundPayment);
+            }
+        }
+
+        /// <summary>
+        /// Process a refund using an existing Payment object (advanced usage).
+        /// </summary>
+        /// <param name="refundPayment">The configured Payment object for the refund</param>
+        public void ProcessRefund(Payment refundPayment)
+        {
+            if (refundPayment == null)
+                throw new ArgumentNullException(nameof(refundPayment));
+
+            payment_sdk_.TransactionManager.ProcessRefund(refundPayment);
         }
 
         /// <summary>

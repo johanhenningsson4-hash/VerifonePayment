@@ -1,15 +1,17 @@
 # Verifone Payment Integration Library
 
-A .NET Framework library for integrating with Verifone payment devices, providing a managed wrapper around the Verifone SDK with comprehensive configuration management and event-driven architecture.
+A .NET Framework library for integrating with Verifone payment devices, providing a managed wrapper around the Verifone SDK with comprehensive configuration management, event-driven architecture, and complete refund processing capabilities.
 
 ## Features
 
 - **Configuration Management**: Flexible configuration via app.config or programmatic setup
 - **Event-Driven Architecture**: Comprehensive event handling for payment operations
-- **Logging Support**: Configurable logging with automatic file management
-- **Device Management**: Complete device lifecycle management (initialization, login, sessions, teardown)
 - **Payment Processing**: Support for various payment types and transaction management
+- **Refund Processing**: Complete linked and unlinked refund functionality with partial refund support
 - **Merchandise Management**: Basket operations for adding/removing items
+- **Device Management**: Complete device lifecycle management (initialization, login, sessions, teardown)
+- **Logging Support**: Configurable logging with automatic file management
+- **Workflow Validation**: State management ensuring proper operation sequence
 
 ## Quick Start
 
@@ -68,16 +70,33 @@ payment.PaymentCompletedEventOccurred += (sender, e) => {
     Console.WriteLine($"Payment completed: {e.Status}");
 };
 
+payment.RefundCompletedEventOccurred += (sender, e) => {
+    Console.WriteLine($"Refund completed: {e.Status}");
+};
+
 // Basic workflow
 try
 {
     payment.CommunicateWithPaymentSDK();
     payment.LoginWithCredentials();
-    payment.StartSession(Guid.NewGuid().ToString());
+    
+    string invoiceId = Guid.NewGuid().ToString();
+    payment.StartSession(invoiceId);
     
     // Add merchandise and process payment
     payment.AddMerchandise();
-    payment.PaymentTransaction(1000); // $10.00
+    string paymentId = Guid.NewGuid().ToString();
+    payment.PaymentTransaction(1000, paymentId, "EUR"); // $10.00
+    
+    // Process refunds (after successful payment)
+    // Full refund (linked to original payment)
+    payment.ProcessLinkedRefund(paymentId);
+    
+    // Or partial refund
+    payment.ProcessLinkedRefund(paymentId, 500, "EUR"); // Refund $5.00
+    
+    // Or unlinked refund (standalone)
+    payment.ProcessUnlinkedRefund(250, "EUR", "REFUND-001");
     
     // Clean up
     payment.EndSession();
@@ -147,7 +166,20 @@ var payment = new VerifonePayment("192.168.1.100");
 #### Transaction Operations
 - `AddMerchandise()` - Add merchandise to the current basket
 - `RemoveMerchandise()` - Remove last merchandise item from basket
-- `PaymentTransaction(amount, paymentType, scale)` - Process a payment transaction
+- `PaymentTransaction(amount, invoiceId, currency, paymentType, scale)` - Process a payment transaction
+
+#### Refund Operations
+- `ProcessLinkedRefund(originalPaymentId, refundAmount, currency, scale)` - Process a linked refund with reference to original payment
+- `ProcessUnlinkedRefund(refundAmount, currency, invoiceId, scale)` - Process an unlinked refund (standalone)
+- `ProcessRefund(refundPayment)` - Advanced refund processing with Payment object
+
+**Refund Features:**
+- **Linked Refunds**: Reference original payment for fraud protection and host support
+- **Unlinked Refunds**: Standalone refunds without payment reference
+- **Full Refunds**: Pass `null` for refundAmount in linked refunds
+- **Partial Refunds**: Specify exact amount to refund (must not exceed original)
+- **Multi-Currency Support**: EUR, USD, GBP, and other standard currencies
+- **Automatic Invoice Generation**: Unique refund IDs with timestamp
 
 #### Configuration & Validation
 - `ValidateConfiguration()` - Check if current configuration is valid
@@ -167,13 +199,19 @@ Available events:
 - `BasketEventOccurred` - Basket/merchandise events
 - `NotificationEventOccurred` - General notifications
 - `PaymentCompletedEventOccurred` - Payment completion events
+- `RefundCompletedEventOccurred` - Refund completion events
 - `CommerceEventOccurred` - Commerce-related events
 
 ## Sample Applications
 
 ### Console Test Application
 
-The included `VerifonePayment.Test` project provides a comprehensive example with an interactive menu for testing all library features.
+The included `VerifonePayment.Test` project provides a comprehensive example with an interactive menu for testing all library features including:
+- Complete payment workflow (SDK initialization ? Login ? Session ? Payment ? Teardown)
+- **Refund Processing**: Both linked and unlinked refunds with full/partial options
+- **Workflow Validation**: State management ensuring proper operation sequence
+- **Real-time Event Monitoring**: Live display of all payment and refund events
+- **Interactive Refund Options**: Choose between full refunds or specify partial amounts
 
 ### Windows Forms Test Application
 
@@ -200,6 +238,62 @@ VerifonePayment.WinFormsTest.exe
 
 See [WinForms Test README](VerifonePayment.WinFormsTest/README.md) for detailed usage instructions.
 
+## Refund Processing Guide
+
+### Linked Refunds (Recommended)
+
+Linked refunds reference the original payment transaction and are preferred for fraud protection and universal host support:
+
+```csharp
+// Full refund - refund the entire original amount
+payment.ProcessLinkedRefund(originalPaymentId);
+
+// Partial refund - specify exact amount to refund
+payment.ProcessLinkedRefund(originalPaymentId, 50.00m, "EUR");
+
+// With custom currency
+payment.ProcessLinkedRefund(originalPaymentId, 25.50m, "USD");
+```
+
+### Unlinked Refunds
+
+Unlinked refunds are standalone transactions without reference to an original payment:
+
+```csharp
+// Basic unlinked refund
+payment.ProcessUnlinkedRefund(75.00m, "EUR");
+
+// With custom invoice ID
+payment.ProcessUnlinkedRefund(100.00m, "EUR", "CUSTOM-REFUND-001");
+```
+
+### Refund Workflow Requirements
+
+1. **SDK Initialization**: Must call `CommunicateWithPaymentSDK()` first
+2. **Authentication**: Must call `LoginWithCredentials()` 
+3. **Active Session**: Must call `StartSession()` before processing refunds
+4. **Linked Refunds**: Require a completed payment transaction to reference
+5. **Event Handling**: Subscribe to `RefundCompletedEventOccurred` for completion tracking
+
+### Refund Event Handling
+
+```csharp
+payment.RefundCompletedEventOccurred += (sender, e) => {
+    if (e.Status == "0") // Success
+    {
+        Console.WriteLine($"Refund completed successfully: {e.Message}");
+    }
+    else if (e.Status == "-11") // Cancelled
+    {
+        Console.WriteLine("Refund was cancelled by user or system");
+    }
+    else // Failed
+    {
+        Console.WriteLine($"Refund failed: {e.Message}");
+    }
+};
+```
+
 ## Dependencies
 
 - **.NET Framework 4.7.2+** - Target framework
@@ -208,10 +302,21 @@ See [WinForms Test README](VerifonePayment.WinFormsTest/README.md) for detailed 
 
 ## Recent Updates
 
+### Version 1.1.0 - Comprehensive Refund Processing
+- **?? Linked Refunds**: Complete refund functionality with reference to original payments
+- **?? Unlinked Refunds**: Standalone refund processing without payment reference
+- **?? Partial Refunds**: Support for partial refund amounts with validation
+- **?? Multi-Currency Refunds**: EUR, USD, GBP and other standard currency support
+- **?? Refund Events**: New `RefundCompletedEventOccurred` event for refund tracking
+- **?? Workflow Validation**: Enhanced state management for payment/refund operations
+- **?? Interactive Refund UI**: Console and WinForms test applications updated with refund options
+- **?? Unit Tests**: 16 new comprehensive refund tests (86 total tests)
+- **?? Documentation**: Complete refund implementation based on Verifone SDK specifications
+
 ### Version 1.0.3 - Stability & Monitoring Enhancements
 - **?? Critical Fix**: Resolved ObjectDisposedException during form disposal
 - **?? Enhanced Monitoring**: Comprehensive debug logging and performance tracking
-- **??? Thread Safety**: Improved cross-thread operation handling
+- **?? Thread Safety**: Improved cross-thread operation handling
 - **?? Diagnostics**: Real-time memory, thread, and resource monitoring
 - **? Stability**: Enhanced form lifecycle management and cleanup
 
@@ -248,6 +353,19 @@ VerifonePayment.WinFormsTest.exe
 ```
 
 ## Changelog
+
+### [1.1.0] - 2026-02-10
+- **?? Comprehensive Refund Processing**: Complete implementation of Verifone refund functionality
+- **?? Linked Refunds**: `ProcessLinkedRefund()` - refunds with reference to original payment
+- **?? Unlinked Refunds**: `ProcessUnlinkedRefund()` - standalone refund processing
+- **?? Partial Refund Support**: Specify exact refund amounts with validation
+- **?? Multi-Currency Support**: EUR, USD, GBP, and other standard currencies
+- **?? Refund Events**: New `RefundCompletedEventOccurred` event for tracking
+- **?? Enhanced Test Applications**: Interactive refund options in both console and WinForms
+- **?? Comprehensive Testing**: 16 new refund unit tests (total: 86 tests)
+- **?? State Management**: Workflow validation for proper payment/refund sequence
+- **?? Automatic Invoice Generation**: Unique refund IDs with timestamps
+- **?? Documentation**: Complete refund API documentation and examples
 
 ### [1.0.3] - 2026-02-09
 - **?? Critical Fix**: Resolved race condition causing `ObjectDisposedException` during application shutdown

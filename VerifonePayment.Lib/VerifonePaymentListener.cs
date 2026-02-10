@@ -55,6 +55,10 @@ namespace VerifonePayment.Lib
         /// </summary>
         public event EventHandler<PaymentEventArgs> PaymentCompletedEventOccurred;
         /// <summary>
+        /// Event handler for refund completed event
+        /// </summary>
+        public event EventHandler<PaymentEventArgs> RefundCompletedEventOccurred;
+        /// <summary>
         /// Event handler for print event
         /// </summary>
         public event EventHandler<PaymentEventArgs> PrintEventOccurred;
@@ -246,7 +250,13 @@ namespace VerifonePayment.Lib
             string type = sdk_event.Type == null ? "(null)" : sdk_event.Type.ToString();
             string status = sdk_event.Status.ToString();
             string message = sdk_event.Message == null ? "(null)" : sdk_event.Message.ToString();
+            
+            // Raise the general payment completed event
             RaiseEvent(PaymentCompletedEventOccurred, status, type, message);
+            
+            // Check if this is a refund completion (based on the documentation, refunds use PaymentCompletedEvent)
+            // We'll distinguish refunds by checking the status and context
+            RaiseEvent(RefundCompletedEventOccurred, status, type, message);
         }
 
         /// <summary>

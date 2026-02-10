@@ -15,6 +15,18 @@ namespace VerifonePayment.Test
         private static ManualResetEvent startSessionStatusEventReceived = new ManualResetEvent(false);
         private static ManualResetEvent basketEventStatusEventReceived = new ManualResetEvent(false);
         private static ManualResetEvent paymentCompletedEventReceived = new ManualResetEvent(false);
+        private static ManualResetEvent refundCompletedEventReceived = new ManualResetEvent(false);
+
+        // State management for workflow validation
+        private static bool isSDKInitialized = false;
+        private static bool isLoggedIn = false;
+        private static bool isSessionStarted = false;
+        private static bool hasMerchandise = false;
+        private static bool isPaymentEnabled = false;
+        private static bool hasCompletedPayment = false;
+        private static bool isRefundEnabled = false;
+        private static string lastPaymentId = null;
+        private static decimal lastPaymentAmount = 0;
 
         #endregion
 
@@ -36,67 +48,228 @@ namespace VerifonePayment.Test
                 verifonePayment.BasketEventOccurred += VerifonePayment_BasketEventOccurred;
                 verifonePayment.NotificationEventOccurred += VerifonePayment_NotificationEventOccurred;
                 verifonePayment.PaymentCompletedEventOccurred += VerifonePayment_PaymentCompletedEventOccurred;
+                verifonePayment.RefundCompletedEventOccurred += VerifonePayment_RefundCompletedEventOccurred;
                 verifonePayment.CommerceEventOccurred += VerifonePayment_CommerceEventOccurred;
 
                 bool running = true;
 
                 while (running)
                 {
-                    Console.WriteLine("Choose an action:");
-                    Console.WriteLine("1. CommunicateWithPaymentSDK");
-                    Console.WriteLine("2. LoginWithCredentials");
-                    Console.WriteLine("3. StartSession");
-                    Console.WriteLine("4. AddMerchandise");
-                    Console.WriteLine("5. PaymentTransaction");
-                    Console.WriteLine("6. RemoveMerchandise");
-                    Console.WriteLine("7. EndSession");
-                    Console.WriteLine("8. TearDown");
-                    Console.WriteLine("9. Run Unit Tests");
+                    Console.WriteLine("\nChoose an action:");
+                    Console.WriteLine($"1. CommunicateWithPaymentSDK {(isSDKInitialized ? "✓" : "○")}");
+                    Console.WriteLine($"2. LoginWithCredentials {(isLoggedIn ? "✓" : "○")} {(!isSDKInitialized ? "(Requires SDK)" : "")}");
+                    Console.WriteLine($"3. StartSession {(isSessionStarted ? "✓" : "○")} {(!isLoggedIn ? "(Requires Login)" : "")}");
+                    Console.WriteLine($"4. AddMerchandise {(hasMerchandise ? "✓" : "○")} {(!isSessionStarted ? "(Requires Session)" : "")}");
+                    Console.WriteLine($"5. PaymentTransaction {(isPaymentEnabled ? "✓ ENABLED" : "✗ DISABLED")} {(!hasMerchandise ? "(Requires Merchandise)" : "")}");
+                    Console.WriteLine($"6. RemoveMerchandise {(!hasMerchandise ? "(No merchandise)" : "")}");
+                    Console.WriteLine($"7. LinkedRefund {(isRefundEnabled ? "✓ ENABLED" : "✗ DISABLED")} {(!hasCompletedPayment ? "(Requires completed payment)" : "")}");
+                    Console.WriteLine($"8. UnlinkedRefund {(isSessionStarted ? "○ AVAILABLE" : "✗ DISABLED")} {(!isSessionStarted ? "(Requires Session)" : "")}");
+                    Console.WriteLine("9. EndSession");
+                    Console.WriteLine("10. TearDown");
+                    Console.WriteLine("11. Run Unit Tests");
+                    Console.WriteLine("S. Show Workflow Status");
                     Console.WriteLine("0. Exit");
+                    
+                    if (hasMerchandise && isPaymentEnabled)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("\n💳 PAYMENT IS NOW ENABLED - You can process transactions!");
+                        Console.ResetColor();
+                    }
 
                     switch (Console.ReadLine())
                     {
                         case "1":
+                            Console.WriteLine("Initializing Payment SDK...");
                             verifonePayment.CommunicateWithPaymentSDK();
                             WaitForEvent(statusEventReceived, "CommunicateWithPaymentSDK");
+                            isSDKInitialized = true;
+                            Console.WriteLine("✓ SDK Initialized successfully!");
                             break;
 
                         case "2":
+                            if (!isSDKInitialized)
+                            {
+                                Console.WriteLine("❌ Please initialize the SDK first (option 1)");
+                                break;
+                            }
+                            Console.WriteLine("Logging in with credentials...");
                             verifonePayment.LoginWithCredentials();
                             WaitForEvent(loginEventReceived, "LoginWithCredentials");
+                            isLoggedIn = true;
+                            Console.WriteLine("✓ Login successful!");
                             break;
 
                         case "3":
+                            if (!isLoggedIn)
+                            {
+                                Console.WriteLine("❌ Please login first (option 2)");
+                                break;
+                            }
+                            Console.WriteLine("Starting new session...");
                             verifonePayment.StartSession(Guid.NewGuid().ToString());
                             WaitForEvent(startSessionStatusEventReceived, "StartSession");
+                            isSessionStarted = true;
+                            Console.WriteLine("✓ Session started successfully!");
                             break;
 
                         case "4":
+                            if (!isSessionStarted)
+                            {
+                                Console.WriteLine("❌ Please start a session first (option 3)");
+                                break;
+                            }
+                            Console.WriteLine("Adding merchandise to basket...");
                             verifonePayment.AddMerchandise();
                             WaitForEvent(basketEventStatusEventReceived, "AddMerchandise");
+                            hasMerchandise = true;
+                            isPaymentEnabled = true; // Enable payment after merchandise is added
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine("✓ Merchandise added successfully!");
+                            Console.WriteLine("💳 Payment is now ENABLED - you can process transactions!");
+                            Console.ResetColor();
                             break;
 
                         case "5":
-                            verifonePayment.PaymentTransaction((long)(new Random().NextDouble() * 99) + 1, System.Guid.NewGuid().ToString(), "EUR");
+                            if (!isPaymentEnabled || !hasMerchandise)
+                            {
+                                Console.WriteLine("❌ Payment is not enabled. Please add merchandise first (option 4)");
+                                break;
+                            }
+                            Console.WriteLine("Processing payment transaction...");
+                            decimal paymentAmount = (decimal)(new Random().NextDouble() * 99) + 1;
+                            string paymentId = System.Guid.NewGuid().ToString();
+                            lastPaymentAmount = paymentAmount;
+                            lastPaymentId = paymentId;
+                            verifonePayment.PaymentTransaction((long)paymentAmount, paymentId, "EUR");
                             WaitForEvent(paymentCompletedEventReceived, "PaymentTransaction");
+                            Console.WriteLine("✓ Payment transaction completed!");
+                            // Reset state after successful payment
+                            hasMerchandise = false;
+                            isPaymentEnabled = false;
+                            hasCompletedPayment = true;
+                            isRefundEnabled = true;
                             break;
 
                         case "6":
+                            if (!hasMerchandise)
+                            {
+                                Console.WriteLine("❌ No merchandise to remove");
+                                break;
+                            }
+                            Console.WriteLine("Removing merchandise from basket...");
                             verifonePayment.RemoveMerchandise();
                             WaitForEvent(basketEventStatusEventReceived, "RemoveMerchandise");
+                            hasMerchandise = false;
+                            isPaymentEnabled = false; // Disable payment when merchandise is removed
+                            Console.WriteLine("✓ Merchandise removed - Payment is now DISABLED");
                             break;
 
                         case "7":
-                            verifonePayment.EndSession();
-                            WaitForEvent(statusEventReceived, "EndSession");
+                            if (!isRefundEnabled || !hasCompletedPayment)
+                            {
+                                Console.WriteLine("❌ Linked refund is not available. Please complete a payment first (option 5)");
+                                break;
+                            }
+                            Console.WriteLine("Processing linked refund...");
+                            Console.WriteLine($"Refunding payment ID: {lastPaymentId}");
+                            Console.WriteLine("1. Full refund");
+                            Console.WriteLine("2. Partial refund");
+                            Console.Write("Choose refund type (1 or 2): ");
+                            var refundChoice = Console.ReadLine();
+                            
+                            if (refundChoice == "1")
+                            {
+                                // Full refund
+                                verifonePayment.ProcessLinkedRefund(lastPaymentId, null, "EUR");
+                                Console.WriteLine($"Processing full refund for payment {lastPaymentId}...");
+                            }
+                            else if (refundChoice == "2")
+                            {
+                                // Partial refund
+                                Console.Write($"Enter refund amount (max: {lastPaymentAmount:F2}): ");
+                                if (decimal.TryParse(Console.ReadLine(), out decimal refundAmount) && refundAmount > 0 && refundAmount <= lastPaymentAmount)
+                                {
+                                    verifonePayment.ProcessLinkedRefund(lastPaymentId, refundAmount, "EUR");
+                                    Console.WriteLine($"Processing partial refund of {refundAmount:F2} for payment {lastPaymentId}...");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("❌ Invalid refund amount");
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("❌ Invalid choice");
+                                break;
+                            }
+                            WaitForEvent(refundCompletedEventReceived, "LinkedRefund");
+                            Console.WriteLine("✓ Linked refund completed!");
+                            isRefundEnabled = false; // Disable further refunds for this payment
                             break;
+
                         case "8":
-                            verifonePayment.TearDown();
-                            WaitForEvent(statusEventReceived, "TearDown");
+                            if (!isSessionStarted)
+                            {
+                                Console.WriteLine("❌ Please start a session first (option 3)");
+                                break;
+                            }
+                            Console.WriteLine("Processing unlinked refund...");
+                            Console.Write("Enter refund amount: ");
+                            if (decimal.TryParse(Console.ReadLine(), out decimal unlinkAmount) && unlinkAmount > 0)
+                            {
+                                string unlinkRefundId = $"UNLINK-{System.Guid.NewGuid().ToString()}";
+                                verifonePayment.ProcessUnlinkedRefund(unlinkAmount, "EUR", unlinkRefundId);
+                                Console.WriteLine($"Processing unlinked refund of {unlinkAmount:F2}...");
+                                WaitForEvent(refundCompletedEventReceived, "UnlinkedRefund");
+                                Console.WriteLine("✓ Unlinked refund completed!");
+                            }
+                            else
+                            {
+                                Console.WriteLine("❌ Invalid refund amount");
+                            }
                             break;
 
                         case "9":
+                            Console.WriteLine("Ending session...");
+                            verifonePayment.EndSession();
+                            WaitForEvent(statusEventReceived, "EndSession");
+                            // Reset session state
+                            isSessionStarted = false;
+                            hasMerchandise = false;
+                            isPaymentEnabled = false;
+                            hasCompletedPayment = false;
+                            isRefundEnabled = false;
+                            lastPaymentId = null;
+                            lastPaymentAmount = 0;
+                            Console.WriteLine("✓ Session ended");
+                            break;
+                            
+                        case "10":
+                            Console.WriteLine("Tearing down SDK...");
+                            verifonePayment.TearDown();
+                            WaitForEvent(statusEventReceived, "TearDown");
+                            // Reset all state
+                            isSDKInitialized = false;
+                            isLoggedIn = false;
+                            isSessionStarted = false;
+                            hasMerchandise = false;
+                            isPaymentEnabled = false;
+                            hasCompletedPayment = false;
+                            isRefundEnabled = false;
+                            lastPaymentId = null;
+                            lastPaymentAmount = 0;
+                            Console.WriteLine("✓ SDK teardown completed");
+                            break;
+
+                        case "11":
                             RunUnitTests();
+                            break;
+
+                        case "S":
+                        case "s":
+                            DisplayWorkflowStatus();
                             break;
 
                         case "0":
@@ -130,6 +303,47 @@ namespace VerifonePayment.Test
             Console.WriteLine($"{actionName}: Waiting for status event...");
             eventHandle.WaitOne();
             eventHandle.Reset();
+        }
+
+        /// <summary>
+        /// Displays the current workflow status
+        /// </summary>
+        private static void DisplayWorkflowStatus()
+        {
+            Console.WriteLine("\n=== Current Workflow Status ===");
+            Console.WriteLine($"SDK Initialized: {(isSDKInitialized ? "✓" : "✗")}");
+            Console.WriteLine($"Logged In: {(isLoggedIn ? "✓" : "✗")}");
+            Console.WriteLine($"Session Started: {(isSessionStarted ? "✓" : "✗")}");
+            Console.WriteLine($"Has Merchandise: {(hasMerchandise ? "✓" : "✗")}");
+            Console.WriteLine($"Payment Enabled: {(isPaymentEnabled ? "✓" : "✗")}");
+            Console.WriteLine($"Has Completed Payment: {(hasCompletedPayment ? "✓" : "✗")}");
+            Console.WriteLine($"Refund Enabled: {(isRefundEnabled ? "✓" : "✗")}");
+            
+            if (!string.IsNullOrEmpty(lastPaymentId))
+            {
+                Console.WriteLine($"Last Payment ID: {lastPaymentId}");
+                Console.WriteLine($"Last Payment Amount: {lastPaymentAmount:F2} EUR");
+            }
+            
+            if (isPaymentEnabled)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("💳 READY FOR PAYMENT PROCESSING");
+                Console.ResetColor();
+            }
+            else if (isRefundEnabled)
+            {
+                Console.ForegroundColor = ConsoleColor.Blue;
+                Console.WriteLine("🔄 READY FOR REFUND PROCESSING");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("⚠️  Payment and refund processing are currently disabled");
+                Console.ResetColor();
+            }
+            Console.WriteLine("===============================\n");
         }
 
         /// <summary>
@@ -215,6 +429,19 @@ namespace VerifonePayment.Test
                 paymentCompletedEventReceived.Set();
             if (e.Type == Lib.Enums.EventType.TRANSACTION_PAYMENT_COMPLETED)
                 paymentCompletedEventReceived.Set();
+        }
+
+        /// <summary>
+        /// Event handler for RefundCompletedEventOccurred
+        /// </summary>
+        /// <param name="sender">The sender</param>
+        /// <param name="e">The event arguments</param>
+        private static void VerifonePayment_RefundCompletedEventOccurred(object sender, Lib.Models.PaymentEventArgs e)
+        {
+            Console.WriteLine($"   - Refund Status: {e.Status}, Type: {e.Type}, Message: {e.Message}");
+
+            // Set the refund completed event for any refund completion
+            refundCompletedEventReceived.Set();
         }
 
         /// <summary>

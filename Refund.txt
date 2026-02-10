@@ -1,0 +1,86 @@
+Refund
+Last updated: 07-May-2025
+Download as PDF
+A refund returns the funds from the merchant to the customer. There are two important types of refunds, linked and unlinked. Only one refund is performed at a time, unlike voids (see Void), though multiple refunds may be performed within the same session.
+
+Refund
+
+Creating a Linked Refund
+A linked refund has reference information to the original payment, providing this information to the host and sometimes even allowing the refund to be processed without the customer presenting their card. Linked refunds are much less likely to be identified as possible fraud, and are universally supported by the payment hosts.
+
+To link a refund, either set the App Specific Data from the original payment on a new Payment (see Linking Payments), or less commonly, send the original Payment directly.
+
+Setting the requested amount totals is optional for linked refunds. Leaving the requested amounts unset will refund the entire amount. The request totals should never be set higher than the original amount for a linked refund, this will generally cause the refund to be declined.
+
+Note:
+
+It is mandatory to set the requested amount totals for linked refunds for the Verifone SCA regional solution. The Transaction Amount is a mandatory field for refunds in both SSI and UGP gateway protocol specifications.
+
+Creating an Unlinked Refund
+An unlinked refund is a simple amount that is pushed from the merchant account into the customer’s account. Unlinked refunds are generally supported by the different hosts, but are not supported universally. Care should be taken when using unlinked refunds to make sure that it is supported by the merchant’s host. Simply create a new Payment for this type of refund and set the requested amount totals (Payment.setRequestedAmounts(totals)).
+
+Partial Refunds
+Partial refunds may be performed by setting the requested amount totals (Payment.setRequestedAmountTotals(totals)) to a value below the original amount.
+
+Performing the Refund
+Use the Payment for either the linked or unlinked refund, calling transactionManager.processRefund(payment). The CommerceListener receives a PaymentCompletedEvent with type TransactionEvent.TRANSACTION_PAYMENT_COMPLETED once the refund is complete. Similarly to other payments, if the StatusCode returned from PaymentCompletedEvent.getStatus() is non-zero (non-SUCCESS), either StatusCode.FAILED, or StatusCode.CANCELLED, then an error occurred and the event will not necessarily contain more information besides the StatusCode and PaymentCompletedEvent.getMessage(). If the StatusCode is StatusCode.SUCCESS, the refund Payment is retrieved using :event.getTransaction().getPayments().get(0).
+
+Java
+Kotlin
+Swift
+C#
+C++
+.NET
+private void HandlePaymentCompletedEvent(PaymentCompletedEvent event)
+{
+    if (event.Type.Value == TransactionEvent.TRANSACTION_ENDED)
+    {
+        if (event.Status == 0)
+        {
+            // The refund was successful.
+            Payment payment = event.GetTransaction.Payments[0];
+            // Information, such as the auth code, are available as well.
+        }
+        else if (event.Status == -11)
+        {
+            // The refund was cancelled, either by the user or externally.
+        }
+        else
+        {
+            // The refund failed in some way.
+            if (event.GetTransaction != null
+                && event.GetTransaction.Payments != null
+                && event.GetTransaction.Payments.Count > 0)
+            {
+                Payment payment = event.GetTransaction.Payments[0];
+                // The auth response text may contain information from the payment host with
+                // more information regarding why it was not successful.
+                payment.AuthResponseText;
+            }
+        }
+    }
+    return event.GenerateTransactionEventResponse();
+}
+ 
+
+See also
+
+TransactionManager.processRefund(Payment)
+
+TransactionEvent.TRANSACTION_ENDED
+
+PaymentCompletedEvent
+
+PaymentCompletedEvent.getStatus()
+
+StatusCode
+
+Transaction.getPayments()
+
+Payment.getAuthCode()
+
+Payment.getAuthResponseText()
+
+Create a Commerce Listener
+
+Start a Session
