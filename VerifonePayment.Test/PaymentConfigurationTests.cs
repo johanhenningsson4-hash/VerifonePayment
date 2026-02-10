@@ -3,6 +3,7 @@ using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using VerifonePayment.Lib;
 using VerifonePayment.Lib.Configuration;
+using VerifonePayment.Lib.Models;
 
 namespace VerifonePayment.Test
 {

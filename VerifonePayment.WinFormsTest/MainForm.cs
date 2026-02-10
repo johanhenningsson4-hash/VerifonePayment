@@ -40,6 +40,7 @@ namespace VerifonePayment.WinFormsTest
             LogDebug($"MainForm constructor starting [Instance: {_instanceId}]");
             
             InitializeComponent();
+            InitializeCurrency();
             InitializePaymentSystem();
             EnablePerformanceMonitoring();
             
@@ -84,9 +85,10 @@ namespace VerifonePayment.WinFormsTest
                 LogMessage($"Configuration: {_verifonePayment.Configuration.GetConfigurationSummary()}");
                 LogMessage("Ready to test payment operations.");
                 
-                // Enable initial buttons
+                // Enable initial buttons and configuration controls
                 _btnCommunicate.Enabled = true;
                 _btnValidateConfig.Enabled = true;
+                _cmbCurrency.Enabled = true;
                 
                 LogOperation("InitializePaymentSystem", "SUCCESS");
             }
@@ -96,6 +98,109 @@ namespace VerifonePayment.WinFormsTest
                 LogError($"Initialization failed: {ex.Message}");
                 MessageBox.Show($"Failed to initialize payment system: {ex.Message}", "Initialization Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        
+        private void InitializeCurrency()
+        {
+            LogOperation("InitializeCurrency");
+            try
+            {
+                // Set default currency selection to USD
+                _cmbCurrency.SelectedIndex = 0; // USD is first in the list
+                
+                // Initialize amount label with currency symbol
+                UpdateAmountLabel();
+                
+                LogOperation("InitializeCurrency", "SUCCESS");
+            }
+            catch (Exception ex)
+            {
+                LogOperation("InitializeCurrency", "ERROR", ex);
+                LogError($"Currency initialization failed: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
+        #region "Currency Management"
+        
+        /// <summary>
+        /// Gets the currently selected currency code
+        /// </summary>
+        public string SelectedCurrency => _cmbCurrency.SelectedItem?.ToString() ?? "USD";
+        
+        /// <summary>
+        /// Gets the currency symbol for the selected currency
+        /// </summary>
+        public string CurrencySymbol
+        {
+            get
+            {
+                switch (SelectedCurrency)
+                {
+                    case "USD":
+                        return "$";
+                    case "EUR":
+                        return "€";
+                    case "SEK":
+                        return "kr";
+                    default:
+                        return "$";
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Updates the amount label to show the current currency symbol
+        /// </summary>
+        private void UpdateAmountLabel()
+        {
+            _lblAmount.Text = $"Amount ({CurrencySymbol}):";
+        }
+        
+        /// <summary>
+        /// Formats an amount with the current currency for display
+        /// </summary>
+        /// <param name="amount">The amount to format</param>
+        /// <returns>Formatted currency string</returns>
+        public string FormatCurrency(decimal amount)
+        {
+            switch (SelectedCurrency)
+            {
+                case "USD":
+                case "EUR":
+                    return $"{CurrencySymbol}{amount:F2}";
+                case "SEK":
+                    return $"{amount:F2} {CurrencySymbol}";
+                default:
+                    return $"{CurrencySymbol}{amount:F2}";
+            }
+        }
+        
+        /// <summary>
+        /// Event handler for currency selection changes
+        /// </summary>
+        private void CmbCurrency_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                LogMessage($"Currency changed to: {SelectedCurrency} ({CurrencySymbol})");
+                UpdateAmountLabel();
+                
+                // Show current amount in new currency format for user feedback
+                decimal currentAmount = _numAmount.Value;
+                if (currentAmount > 0)
+                {
+                    LogMessage($"Current amount: {FormatCurrency(currentAmount)}");
+                }
+                
+                // Log the change for debugging
+                LogOperation($"CurrencyChanged to {SelectedCurrency}");
+            }
+            catch (Exception ex)
+            {
+                LogError($"Currency change failed: {ex.Message}");
             }
         }
         
@@ -127,6 +232,8 @@ namespace VerifonePayment.WinFormsTest
                 {
                     _btnStartSession.Enabled = true;
                     _txtInvoiceId.Enabled = true;
+                    _numAmount.Enabled = true;
+                    _cmbCurrency.Enabled = true;
                 }));
             });
         }
@@ -176,10 +283,13 @@ namespace VerifonePayment.WinFormsTest
                 return;
             }
             
+            string currency = SelectedCurrency;
+            LogMessage($"Processing payment: {FormatCurrency(amount)}");
+            
             await ExecutePaymentOperation("PaymentTransaction", () =>
             {
-                long centAmount = (long)(amount * 100); // Convert to cents
-                _verifonePayment.PaymentTransaction(centAmount);
+                //long centAmount = (long)(amount * 100); // Convert to cents
+                _verifonePayment.PaymentTransaction(amount, _txtInvoiceId.Text, currency);
                 WaitForEvent(_paymentCompletedEventReceived, "PaymentTransaction");
             });
         }
@@ -209,6 +319,7 @@ namespace VerifonePayment.WinFormsTest
                     _btnEndSession.Enabled = false;
                     _btnTearDown.Enabled = true;
                     _numAmount.Enabled = false;
+                    _cmbCurrency.Enabled = false;
                 }));
             });
         }

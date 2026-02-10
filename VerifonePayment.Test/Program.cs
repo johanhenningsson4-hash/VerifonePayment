@@ -74,7 +74,7 @@ namespace VerifonePayment.Test
                             break;
 
                         case "5":
-                            verifonePayment.PaymentTransaction((long)(new Random().NextDouble() * 99) + 1);
+                            verifonePayment.PaymentTransaction((long)(new Random().NextDouble() * 99) + 1, System.Guid.NewGuid().ToString(), "EUR");
                             WaitForEvent(paymentCompletedEventReceived, "PaymentTransaction");
                             break;
 

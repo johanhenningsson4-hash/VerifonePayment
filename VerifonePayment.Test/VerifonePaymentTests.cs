@@ -1,7 +1,7 @@
 using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using VerifonePayment.Lib;
-using VerifonePayment.Lib.Enums;
+using static VerifonePayment.Lib.Enums;
 
 namespace VerifonePayment.Test
 {

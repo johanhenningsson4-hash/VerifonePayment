@@ -131,20 +131,23 @@ jobs:
             Write-Host "No TRX files found, creating placeholder result..."
             
             # Create a minimal test result file for the reporter
-            $placeholderTrx = @"
-<?xml version="1.0" encoding="utf-8"?>
-<TestRun id="$((New-Guid).ToString())" name="Placeholder Test Run" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
-  <Times creation="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" queuing="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" start="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" finish="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" />
-  <Results></Results>
-  <TestDefinitions></TestDefinitions>
-  <TestEntries></TestEntries>
-  <TestLists></TestLists>
-  <ResultSummary outcome="Completed">
-    <Counters total="0" executed="0" passed="0" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
-  </ResultSummary>
-</TestRun>
-"@
-            $placeholderTrx | Out-File -FilePath "TestResults\placeholder.trx" -Encoding utf8
+            $guid1 = [System.Guid]::NewGuid().ToString()
+            $guid2 = [System.Guid]::NewGuid().ToString()
+            $timestamp = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK'
+            
+            $placeholderContent = '<?xml version="1.0" encoding="utf-8"?>' + "`n"
+            $placeholderContent += '<TestRun id="' + $guid1 + '" name="Placeholder Test Run" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">' + "`n"
+            $placeholderContent += '  <Times creation="' + $timestamp + '" queuing="' + $timestamp + '" start="' + $timestamp + '" finish="' + $timestamp + '" />' + "`n"
+            $placeholderContent += '  <Results></Results>' + "`n"
+            $placeholderContent += '  <TestDefinitions></TestDefinitions>' + "`n"
+            $placeholderContent += '  <TestEntries></TestEntries>' + "`n"
+            $placeholderContent += '  <TestLists></TestLists>' + "`n"
+            $placeholderContent += '  <ResultSummary outcome="Completed">' + "`n"
+            $placeholderContent += '    <Counters total="0" executed="0" passed="0" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />' + "`n"
+            $placeholderContent += '  </ResultSummary>' + "`n"
+            $placeholderContent += '</TestRun>'
+            
+            $placeholderContent | Out-File -FilePath "TestResults\placeholder.trx" -Encoding utf8
             Write-Host "Created placeholder test result file"
           }
         } else {
@@ -196,20 +199,22 @@ jobs:
             Write-Host "No test assemblies found, creating placeholder result"
             
             # Create placeholder result
-            $placeholderContent = @"
-<?xml version="1.0" encoding="utf-8"?>
-<TestRun id="$((New-Guid).ToString())" name="No Tests Found" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
-  <Times creation="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" queuing="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" start="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" finish="$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK')" />
-  <Results></Results>
-  <TestDefinitions></TestDefinitions>
-  <TestEntries></TestEntries>
-  <TestLists></TestLists>
-  <ResultSummary outcome="Completed">
-    <Counters total="0" executed="0" passed="0" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
-  </ResultSummary>
-</TestRun>
-"@
-            $placeholderContent | Out-File -FilePath "TestResults\no-tests-found.trx" -Encoding utf8
+            $guid3 = [System.Guid]::NewGuid().ToString()
+            $timestamp2 = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffffffK'
+            
+            $placeholderXml = '<?xml version="1.0" encoding="utf-8"?>' + "`n"
+            $placeholderXml += '<TestRun id="' + $guid3 + '" name="No Tests Found" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">' + "`n"
+            $placeholderXml += '  <Times creation="' + $timestamp2 + '" queuing="' + $timestamp2 + '" start="' + $timestamp2 + '" finish="' + $timestamp2 + '" />' + "`n"
+            $placeholderXml += '  <Results></Results>' + "`n"
+            $placeholderXml += '  <TestDefinitions></TestDefinitions>' + "`n"
+            $placeholderXml += '  <TestEntries></TestEntries>' + "`n"
+            $placeholderXml += '  <TestLists></TestLists>' + "`n"
+            $placeholderXml += '  <ResultSummary outcome="Completed">' + "`n"
+            $placeholderXml += '    <Counters total="0" executed="0" passed="0" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />' + "`n"
+            $placeholderXml += '  </ResultSummary>' + "`n"
+            $placeholderXml += '</TestRun>'
+            
+            $placeholderXml | Out-File -FilePath "TestResults\no-tests-found.trx" -Encoding utf8
           }
         }
         

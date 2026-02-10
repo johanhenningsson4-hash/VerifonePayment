@@ -344,23 +344,23 @@ namespace VerifonePayment.Lib
         /// Payment transaction.
         /// </summary>
         /// <param name="total">The total amount.</param>
-        public void PaymentTransaction(long total, Enums.PaymentType paymentType = Enums.PaymentType.CREDIT, int scale = 2)
+        public void PaymentTransaction(decimal totalAmount, string InvoiceId, string currency, Enums.PaymentType paymentType = Enums.PaymentType.CREDIT, int scale = 2)
         {
-            var payment = Payment.Create();
-            var current_amount_totals = payment_sdk_.TransactionManager.BasketManager.CurrentAmountTotals;
-            
-            if (current_amount_totals == null)
-            {
-                current_amount_totals = AmountTotals.Create(true);
-                current_amount_totals.SetWithAmounts(new VerifoneSdk.Decimal(scale, total), new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(0),
-                        new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(0), new VerifoneSdk.Decimal(scale, total));
-            }
-            
-            payment.RequestedAmounts = current_amount_totals;
-            payment.RequestedAmounts.Total = new VerifoneSdk.Decimal(scale, total);
-            payment.PaymentType = (VerifoneSdk.PaymentType?)paymentType;
+            VerifoneSdk.Decimal requestedAmount = VerifoneSdk.Decimal.FromDecimal(ref totalAmount);
 
-            payment_sdk_.TransactionManager.StartPayment(payment);
+            using (Payment payment = Payment.Create())
+            using (AmountTotals total = AmountTotals.Create(true))
+            {
+                payment.LocalPaymentId = InvoiceId;
+                payment.Invoice = InvoiceId;
+                //payment.SaleNote = request.SaleNote;
+                payment.SaleNote = "";
+                payment.Currency = currency;
+                total.Total = requestedAmount;
+                payment.RequestedAmounts = total;
+
+                payment_sdk_.TransactionManager.StartPayment(payment);
+            }
         }
 
         /// <summary>
