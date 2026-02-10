@@ -52,7 +52,6 @@
     <Compile Include="PaymentConfigurationTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="TestRunner.cs" />
     <Compile Include="VerifonePaymentTests.cs" />
   </ItemGroup>
   <ItemGroup>

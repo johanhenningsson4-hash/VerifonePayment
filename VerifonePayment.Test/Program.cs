@@ -226,6 +226,7 @@ namespace VerifonePayment.Test
         {
             Console.WriteLine($"   - Status: {e.Status}, Type: {e.Type}, Message: {e.Message}");
 
+        #endregion
             if (e.Type == Lib.Enums.EventType.STATUS_ERROR && e.Status == "-20")
                 startSessionStatusEventReceived.Set();
         }
