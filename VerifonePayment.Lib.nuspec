@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>VerifonePayment.Lib</id>
+    <version>1.2.0</version>
+    <title>Verifone Payment Integration Library</title>
+    <authors>Johan Henningsson</authors>
+    <owners>Johan Henningsson</owners>
+    <description>A comprehensive .NET Framework library for integrating with Verifone payment devices, providing a managed wrapper around the Verifone SDK with advanced receipt handling, refund processing, reconciliation, and reporting capabilities.</description>
+    <releaseNotes>
+Version 1.2.0 - Advanced Receipt Handling &amp; Comprehensive Reporting
+- Complete receipt processing: extraction, validation, formatting, and archiving
+- Multi-format receipt saving (plain text, HTML, metadata) with timestamped archiving
+- Advanced receipt validation with detailed issue and warning reporting
+- Automatic printing capability detection and receipt printing support
+- Comprehensive reconciliation and reporting with end-of-day operations
+- Store &amp; Forward (SAF) transaction querying and offline transaction management
+- Transaction queries with advanced filtering, pagination, and time-based searches
+- Complete reporting capability discovery and enumeration
+- Enhanced console and WinForms test applications with receipt handling
+- Print and receipt delivery event handling
+- 37 new comprehensive unit tests (123 total tests)
+- Complete API documentation and usage guides
+    </releaseNotes>
+    <summary>Complete Verifone payment device integration with receipt handling, refunds, reconciliation, and reporting for .NET Framework applications.</summary>
+    <language>en-US</language>
+    <projectUrl>https://github.com/johanhenningsson4-hash/VerifonePayment</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/johanhenningsson4-hash/VerifonePayment/main/icon.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>https://github.com/johanhenningsson4-hash/VerifonePayment/blob/main/LICENSE</licenseUrl>
+    <copyright>Copyright © 2024-2026</copyright>
+    <dependencies>
+      <group targetFramework=".NETFramework4.7.2">
+        <dependency id="System.Configuration.ConfigurationManager" version="4.7.0" />
+      </group>
+    </dependencies>
+    <references></references>
+    <tags>verifone payment pos terminal sdk receipt refund reconciliation reporting .net framework</tags>
+  </metadata>
+  <files>
+    <file src="VerifonePayment.Lib\bin\Release\VerifonePayment.Lib.dll" target="lib\net472\VerifonePayment.Lib.dll" />
+    <file src="VerifonePayment.Lib\bin\Release\VerifonePayment.Lib.pdb" target="lib\net472\VerifonePayment.Lib.pdb" />
+    <file src="README.md" target="README.md" />
+    <file src="LICENSE" target="LICENSE" />
+    <file src="VerifonePayment.Lib\**\*.cs" target="src\VerifonePayment.Lib" exclude="VerifonePayment.Lib\bin\**;VerifonePayment.Lib\obj\**" />
+  </files>
+</package>

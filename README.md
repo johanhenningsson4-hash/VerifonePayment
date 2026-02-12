@@ -423,6 +423,18 @@ payment.RefundCompletedEventOccurred += (sender, e) => {
 
 ## Recent Updates
 
+### Version 1.2.0 - Advanced Receipt Handling & Comprehensive Reporting
+- **Receipt Processing**: Complete receipt extraction, validation, and formatting capabilities
+- **Receipt Storage**: Multi-format saving (plain text, HTML, metadata) and timestamped archiving
+- **Receipt Validation**: Comprehensive validation with detailed issue/warning reporting
+- **Print Integration**: Automatic printing capability detection and receipt printing
+- **Reconciliation & Reporting**: End-of-day operations, transaction querying, and Store & Forward (SAF) support
+- **Transaction Queries**: Advanced filtering, pagination, and offline transaction support
+- **Capability Discovery**: Complete reporting capability enumeration and checking
+- **Enhanced Console App**: Receipt handling, reconciliation, and reporting menu options
+- **Comprehensive Testing**: 18 new receipt tests + 19 reconciliation tests (123 total tests)
+- **Complete Documentation**: Receipt processing guides and API reference
+
 ### Version 1.1.0 - Comprehensive Refund Processing
 - **?? Linked Refunds**: Complete refund functionality with reference to original payments
 - **?? Unlinked Refunds**: Standalone refund processing without payment reference
@@ -474,6 +486,21 @@ VerifonePayment.WinFormsTest.exe
 ```
 
 ## Changelog
+
+### [1.2.0] - 2026-02-10
+- **Receipt Processing**: Comprehensive receipt extraction, validation, and formatting capabilities
+- **ReceiptWrapper Model**: Complete wrapper around Verifone SDK Receipt class with C# 7.3 compatibility
+- **Receipt Storage**: Multi-format saving (plain text, HTML, metadata) and timestamped archiving
+- **Receipt Validation**: Advanced validation with detailed issue and warning reporting
+- **Print Integration**: Automatic printing capability detection and receipt printing support
+- **Reconciliation & Reporting**: Complete end-of-day operations and transaction querying
+- **Store & Forward (SAF)**: Offline transaction querying and management
+- **Transaction Queries**: Advanced filtering, pagination, and time-based searches
+- **Capability Discovery**: Complete reporting capability enumeration and checking
+- **Enhanced Console App**: Receipt handling and reconciliation menu options with interactive workflows
+- **Print & Receipt Events**: PrintEventOccurred and ReceiptDeliveryMethodEventOccurred event handling
+- **Comprehensive Testing**: 18 receipt tests + 19 reconciliation tests (123 total tests)
+- **Complete API Documentation**: Receipt processing guides and comprehensive API reference
 
 ### [1.1.0] - 2026-02-10
 - **?? Comprehensive Refund Processing**: Complete implementation of Verifone refund functionality
