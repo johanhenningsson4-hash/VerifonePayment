@@ -1,0 +1,56 @@
+Handling Device Requests from the Payment Application
+Last updated: 04-Mar-2022
+Download as PDF
+There will be times when the POI requires input from the cashier. In these cases, the CommerceListener will receive an event of type UserInputEvent.REQUEST_TYPE. The event contains a RequestParameters object, which contains all of the different values and type of request that should be displayed to the cashier. Any time the response is required by the request, the listener must display this information to the cashier for the current flow to proceed. The receiving application must construct a new Values object, populating it with the data received from the cashier, then attach it to the response object from UserInputEvent.generateResponse(), and send it back to the payment application using TransactionManager.sendEventResponse(response).
+
+handling_device
+
+Java
+Kotlin
+Swift
+C#
+C++
+.NET
+private readonly EventHandler<UserInputEvent> user_input_event_handler_;
+
+private void HandleUserInputvent(UserInputEvent event)
+{
+    if (event.Type.Value == UserInputEvent.REQUEST_TYPE)
+    {
+        var request_parameters = event.RequestParameters;
+        var response = event.GenerateUserInputEventResponse();
+        // Based on requestParameters.getInputType(), present the appropriate dialog.
+        // Keep track of the response, it is needed once the input is collected.
+    }
+}
+
+// ...
+// Link event handler after initialization is complete but before requesting input
+user_input_event_handler_ = async (sender, args) =>
+{
+    await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,
+        () => HandleEvent(args));
+};
+payment_sdk_.TransactionManager.HandleUserInputEvent += user_input_event_handler_;
+
+// ...
+// Send back the response once the input is collected.
+var responseValues = response.ResponseValues;
+// Set the appropriate value on the values object based on the input type.
+response.ResponseValues(responseValues);
+transaction_manager_.SendInputResponse(response);
+ 
+
+See also
+
+CommerceListener.handleEvent(event)
+
+UserInputEvent.REQUEST_TYPE
+
+UserInputEvent.generateResponse()
+
+UserInputEvent.getRequestParameters()
+
+UserInputEvent.RequestParameters.getInputType()
+
+TransactionManager.sendEventResponse(response)

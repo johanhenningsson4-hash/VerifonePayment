@@ -34,6 +34,9 @@ namespace VerifonePayment.Test
         private static decimal lastPaymentAmount = 0;
         private static Lib.Models.ReceiptWrapper lastReceipt = null;
 
+        // Make verifonePayment accessible to event handlers
+        private static Lib.VerifonePayment verifonePayment = null;
+
         #endregion
 
         static void Main(string[] args)
@@ -41,8 +44,8 @@ namespace VerifonePayment.Test
             try
             {
                 // Use configuration from app.config by default
-                var verifonePayment = new Lib.VerifonePayment();
-                
+                verifonePayment = new Lib.VerifonePayment();
+
                 Console.WriteLine("=== Verifone Payment Test Application ===");
                 Console.WriteLine($"Configuration: {verifonePayment.Configuration.GetConfigurationSummary()}");
                 Console.WriteLine();
@@ -59,6 +62,7 @@ namespace VerifonePayment.Test
                 verifonePayment.TransactionQueryEventOccurred += VerifonePayment_TransactionQueryEventOccurred;
                 verifonePayment.PrintEventOccurred += VerifonePayment_PrintEventOccurred;
                 verifonePayment.ReceiptDeliveryMethodEventOccurred += VerifonePayment_ReceiptDeliveryMethodEventOccurred;
+                verifonePayment.UserInputRequestOccurred += VerifonePayment_UserInputRequestOccurred;
                 verifonePayment.CommerceEventOccurred += VerifonePayment_CommerceEventOccurred;
 
                 bool running = true;
@@ -738,7 +742,7 @@ namespace VerifonePayment.Test
         private static void VerifonePayment_ReceiptDeliveryMethodEventOccurred(object sender, Lib.Models.PaymentEventArgs e)
         {
             Console.WriteLine($"   - Receipt Delivery Status: {e.Status}, Type: {e.Type}, Message: {e.Message}");
-            
+
             if (e.Status == "0") // Success
             {
                 Console.WriteLine("✓ Receipt delivery method completed successfully");
@@ -747,8 +751,148 @@ namespace VerifonePayment.Test
             {
                 Console.WriteLine($"⚠️ Receipt delivery issue: Status {e.Status}");
             }
-            
+
             receiptDeliveryEventReceived.Set();
+        }
+
+        /// <summary>
+        /// Event handler for UserInputRequestOccurred
+        /// </summary>
+        /// <param name="sender">The sender</param>
+        /// <param name="e">The event arguments</param>
+        private static void VerifonePayment_UserInputRequestOccurred(object sender, Lib.Models.UserInputRequestEventArgs e)
+        {
+            Console.WriteLine($"\n🔔 USER INPUT REQUEST RECEIVED 🔔");
+            Console.WriteLine($"Input Type: {e.Request.InputType}");
+            Console.WriteLine($"Message: {e.Request.Message}");
+            Console.WriteLine($"Prompt: {e.Request.Prompt}");
+            Console.WriteLine($"Requires Input: {e.Request.RequiresInput}");
+            Console.WriteLine($"Is Masked: {e.Request.IsMasked}");
+
+            try
+            {
+                if (e.Request.RequiresInput)
+                {
+                    // Handle different input types
+                    string inputType = e.Request.InputType.ToUpperInvariant();
+
+                    if (inputType.Contains("TEXT") || inputType.Contains("STRING"))
+                    {
+                        Console.Write($"Enter text response: ");
+                        string textInput = Console.ReadLine();
+
+                        if (verifonePayment.RespondToUserInput(e.Request, textInput))
+                        {
+                            Console.WriteLine("✓ Text response sent successfully");
+                        }
+                        else
+                        {
+                            Console.WriteLine("❌ Failed to send text response");
+                        }
+                    }
+                    else if (inputType.Contains("NUMERIC") || inputType.Contains("AMOUNT"))
+                    {
+                        Console.Write($"Enter numeric response: ");
+                        string numericInput = Console.ReadLine();
+
+                        if (decimal.TryParse(numericInput, out decimal numericValue))
+                        {
+                            if (verifonePayment.RespondToUserInput(e.Request, numericValue))
+                            {
+                                Console.WriteLine("✓ Numeric response sent successfully");
+                            }
+                            else
+                            {
+                                Console.WriteLine("❌ Failed to send numeric response");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("❌ Invalid numeric input, sending 0");
+                            verifonePayment.RespondToUserInput(e.Request, 0m);
+                        }
+                    }
+                    else if (inputType.Contains("SELECT") || inputType.Contains("CHOICE"))
+                    {
+                        Console.WriteLine("Available options:");
+                        for (int i = 0; i < e.Request.Options.Count; i++)
+                        {
+                            Console.WriteLine($"  {i}: {e.Request.Options[i]}");
+                        }
+
+                        if (e.Request.Options.Count == 0)
+                        {
+                            Console.WriteLine("  0: Default Option");
+                        }
+
+                        Console.Write($"Select option (0-{Math.Max(0, e.Request.Options.Count - 1)}): ");
+                        string selectionInput = Console.ReadLine();
+
+                        if (int.TryParse(selectionInput, out int selectedIndex))
+                        {
+                            if (verifonePayment.RespondToUserInput(e.Request, selectedIndex))
+                            {
+                                Console.WriteLine("✓ Selection response sent successfully");
+                            }
+                            else
+                            {
+                                Console.WriteLine("❌ Failed to send selection response");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("❌ Invalid selection, sending 0");
+                            verifonePayment.RespondToUserInput(e.Request, 0);
+                        }
+                    }
+                    else if (inputType.Contains("CONFIRM") || inputType.Contains("ACKNOWLEDGE"))
+                    {
+                        Console.Write($"Confirm (Y/N): ");
+                        string confirmInput = Console.ReadLine();
+                        bool confirmed = confirmInput?.ToUpperInvariant().StartsWith("Y") == true;
+
+                        if (verifonePayment.RespondToUserInput(e.Request, confirmed))
+                        {
+                            Console.WriteLine($"✓ Confirmation response sent: {(confirmed ? "YES" : "NO")}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("❌ Failed to send confirmation response");
+                        }
+                    }
+                    else
+                    {
+                        // Unknown input type - provide generic confirmation
+                        Console.WriteLine($"⚠️ Unknown input type '{e.Request.InputType}', sending default confirmation");
+                        verifonePayment.RespondToUserInput(e.Request, true);
+                    }
+                }
+                else
+                {
+                    // Display-only message - just acknowledge
+                    Console.WriteLine("📋 Display-only message - automatically acknowledging");
+                    verifonePayment.RespondToUserInput(e.Request, true);
+                }
+
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error handling user input request: {ex.Message}");
+
+                // Try to send a default response to avoid blocking the payment flow
+                try
+                {
+                    verifonePayment.RespondToUserInput(e.Request, true);
+                    e.Handled = true;
+                }
+                catch
+                {
+                    Console.WriteLine("❌ Failed to send default response");
+                }
+            }
+
+            Console.WriteLine("🔔 USER INPUT REQUEST COMPLETED 🔔\n");
         }
 
         /// <summary>

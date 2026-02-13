@@ -94,6 +94,11 @@ namespace VerifonePayment.Lib
         /// Event handler for user input event
         /// </summary>
         public event EventHandler<PaymentEventArgs> UserInputEventOccurred;
+
+        /// <summary>
+        /// Event handler for user input requests that require cashier interaction
+        /// </summary>
+        public event EventHandler<Models.UserInputRequestEventArgs> UserInputRequestOccurred;
         /// <summary>
         /// Event handler for device vitals information event
         /// </summary>
@@ -362,7 +367,88 @@ namespace VerifonePayment.Lib
             string type = sdk_event.Type == null ? "(null)" : sdk_event.Type.ToString();
             string status = sdk_event.Status.ToString();
             string message = sdk_event.Message == null ? "(null)" : sdk_event.Message.ToString();
+
+            // Always raise the general user input event
             RaiseEvent(UserInputEventOccurred, status, type, message);
+
+            // Handle REQUEST_TYPE specifically according to documentation
+            if (sdk_event.Type?.ToString() == "REQUEST_TYPE")
+            {
+                try
+                {
+                    var requestParameters = sdk_event.RequestParameters;
+                    if (requestParameters != null)
+                    {
+                        var response = sdk_event.GenerateUserInputEventResponse();
+                        if (response != null)
+                        {
+                            var userInputRequest = new Models.UserInputRequest(requestParameters, response);
+                            var eventArgs = new Models.UserInputRequestEventArgs(userInputRequest);
+
+                            // Raise the specific user input request event
+                            UserInputRequestOccurred?.Invoke(this, eventArgs);
+
+                            // If the request wasn't handled by the event subscribers, 
+                            // we might need to provide a default response
+                            if (!eventArgs.Handled)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Unhandled user input request: {userInputRequest.InputType}");
+
+                                // Provide a default response to avoid blocking the payment flow
+                                ProvideDefaultResponse(userInputRequest);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error handling user input request: {ex.Message}");
+
+                    // Log the error but don't let it crash the application
+                    RaiseEvent(UserInputEventOccurred, "-1", "ERROR", $"User input handling error: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Provides a default response for unhandled user input requests to avoid blocking the payment flow.
+        /// </summary>
+        /// <param name="request">The user input request</param>
+        private void ProvideDefaultResponse(Models.UserInputRequest request)
+        {
+            try
+            {
+                var inputType = request.InputType.ToUpperInvariant();
+
+                // Provide sensible defaults based on input type
+                if (inputType.Contains("CONFIRM") || inputType.Contains("ACKNOWLEDGE"))
+                {
+                    request.SetConfirmationResponse(true); // Auto-confirm
+                }
+                else if (inputType.Contains("SELECT") || inputType.Contains("CHOICE"))
+                {
+                    request.SetSelectionResponse(0); // Select first option
+                }
+                else if (inputType.Contains("TEXT") || inputType.Contains("STRING"))
+                {
+                    request.SetTextResponse(""); // Empty text response
+                }
+                else if (inputType.Contains("NUMERIC") || inputType.Contains("AMOUNT"))
+                {
+                    request.SetNumericResponse(0); // Zero numeric response
+                }
+                else
+                {
+                    // Generic confirmation for unknown types
+                    request.SetConfirmationResponse(true);
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Provided default response for {inputType}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error providing default response: {ex.Message}");
+            }
         }
 
         /// <summary>

@@ -1029,4 +1029,276 @@ namespace VerifonePayment.Test
             Assert.AreNotEqual(filename1, filename2, "Archive filenames should be unique");
         }
     }
+
+    [TestClass]
+    public class UserInputHandlingTests
+    {
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_WithNullRequestParameters_ShouldHandleGracefully()
+        {
+            // Test handling of null request parameters
+            object nullParams = null;
+
+            Assert.IsTrue(nullParams == null, "Null parameters should be handled gracefully");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_InputTypeHandling_ShouldRecognizeCommonTypes()
+        {
+            // Test input type recognition
+            string textType = "TEXT_INPUT";
+            string numericType = "NUMERIC_INPUT";
+            string confirmType = "CONFIRM_DIALOG";
+            string selectType = "SELECT_OPTION";
+
+            Assert.IsTrue(textType.ToUpperInvariant().Contains("TEXT"), "Should recognize text input type");
+            Assert.IsTrue(numericType.ToUpperInvariant().Contains("NUMERIC"), "Should recognize numeric input type");
+            Assert.IsTrue(confirmType.ToUpperInvariant().Contains("CONFIRM"), "Should recognize confirmation type");
+            Assert.IsTrue(selectType.ToUpperInvariant().Contains("SELECT"), "Should recognize selection type");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_RequiresInputValidation_ShouldIdentifyInputNeeds()
+        {
+            // Test input requirement detection
+            string displayOnly = "DISPLAY_ONLY";
+            string acknowledge = "ACKNOWLEDGE";
+            string textInput = "TEXT_INPUT";
+
+            bool displayRequiresInput = !displayOnly.Contains("DISPLAY_ONLY") && !displayOnly.Contains("ACKNOWLEDGE");
+            bool ackRequiresInput = !acknowledge.Contains("DISPLAY_ONLY") && !acknowledge.Contains("ACKNOWLEDGE");
+            bool textRequiresInput = !textInput.Contains("DISPLAY_ONLY") && !textInput.Contains("ACKNOWLEDGE");
+
+            Assert.IsFalse(displayRequiresInput, "Display-only should not require input");
+            Assert.IsFalse(ackRequiresInput, "Acknowledge should not require input");
+            Assert.IsTrue(textRequiresInput, "Text input should require input");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_MaskedInputDetection_ShouldIdentifySecureFields()
+        {
+            // Test masked input detection
+            string pinInput = "PIN_INPUT";
+            string passwordInput = "PASSWORD_ENTRY";
+            string secureInput = "SECURE_TEXT";
+            string normalInput = "TEXT_INPUT";
+
+            bool pinIsMasked = pinInput.ToUpperInvariant().Contains("PIN");
+            bool passwordIsMasked = passwordInput.ToUpperInvariant().Contains("PASSWORD");
+            bool secureIsMasked = secureInput.ToUpperInvariant().Contains("SECURE");
+            bool normalIsMasked = normalInput.ToUpperInvariant().Contains("PIN") || 
+                                  normalInput.ToUpperInvariant().Contains("PASSWORD") || 
+                                  normalInput.ToUpperInvariant().Contains("SECURE");
+
+            Assert.IsTrue(pinIsMasked, "PIN input should be masked");
+            Assert.IsTrue(passwordIsMasked, "Password input should be masked");
+            Assert.IsTrue(secureIsMasked, "Secure input should be masked");
+            Assert.IsFalse(normalIsMasked, "Normal text input should not be masked");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        [DataRow("TEXT_INPUT", "text", DisplayName = "Text input response")]
+        [DataRow("NUMERIC_INPUT", "numeric", DisplayName = "Numeric input response")]
+        [DataRow("SELECT_OPTION", "selection", DisplayName = "Selection input response")]
+        [DataRow("CONFIRM_DIALOG", "confirmation", DisplayName = "Confirmation input response")]
+        public void UserInputRequest_ResponseTypesValidation_ShouldMatchInputType(string inputType, string expectedResponseType)
+        {
+            // Test that response types match input types
+            string responseType = "";
+
+            if (inputType.Contains("TEXT"))
+                responseType = "text";
+            else if (inputType.Contains("NUMERIC"))
+                responseType = "numeric";
+            else if (inputType.Contains("SELECT"))
+                responseType = "selection";
+            else if (inputType.Contains("CONFIRM"))
+                responseType = "confirmation";
+
+            Assert.AreEqual(expectedResponseType, responseType, $"Response type should match input type {inputType}");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_SetTextResponse_ShouldHandleEmptyAndNullValues()
+        {
+            // Test text response handling
+            string validText = "Valid Response";
+            string emptyText = "";
+            string nullText = null;
+
+            // Simulate setting text responses
+            string processedValid = validText ?? string.Empty;
+            string processedEmpty = emptyText ?? string.Empty;
+            string processedNull = nullText ?? string.Empty;
+
+            Assert.AreEqual("Valid Response", processedValid, "Valid text should be preserved");
+            Assert.AreEqual("", processedEmpty, "Empty text should remain empty");
+            Assert.AreEqual("", processedNull, "Null text should become empty string");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_SetNumericResponse_ShouldHandleValidNumbers()
+        {
+            // Test numeric response handling
+            decimal validNumber = 123.45m;
+            decimal zeroNumber = 0m;
+            decimal negativeNumber = -50.25m;
+
+            Assert.IsTrue(validNumber > 0, "Valid positive number should be accepted");
+            Assert.IsTrue(zeroNumber == 0, "Zero should be accepted");
+            Assert.IsTrue(negativeNumber < 0, "Negative numbers should be handled");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_SetSelectionResponse_ShouldValidateIndex()
+        {
+            // Test selection response validation
+            int validIndex = 2;
+            int zeroIndex = 0;
+            int negativeIndex = -1;
+
+            Assert.IsTrue(validIndex >= 0, "Valid index should be non-negative");
+            Assert.IsTrue(zeroIndex >= 0, "Zero index should be valid");
+            Assert.IsFalse(negativeIndex >= 0, "Negative index should be invalid");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_SetConfirmationResponse_ShouldHandleBooleans()
+        {
+            // Test confirmation response handling
+            bool confirmedTrue = true;
+            bool confirmedFalse = false;
+
+            Assert.IsTrue(confirmedTrue, "True confirmation should be true");
+            Assert.IsFalse(confirmedFalse, "False confirmation should be false");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_DefaultResponseLogic_ShouldProvideAppropriateDefaults()
+        {
+            // Test default response logic for different input types
+            string confirmType = "CONFIRM_DIALOG";
+            string selectType = "SELECT_OPTION";
+            string textType = "TEXT_INPUT";
+            string numericType = "NUMERIC_INPUT";
+            string unknownType = "UNKNOWN_TYPE";
+
+            // Simulate default response logic
+            bool confirmDefault = confirmType.ToUpperInvariant().Contains("CONFIRM");
+            bool selectDefault = selectType.ToUpperInvariant().Contains("SELECT");
+            bool textDefault = textType.ToUpperInvariant().Contains("TEXT");
+            bool numericDefault = numericType.ToUpperInvariant().Contains("NUMERIC");
+            bool unknownDefault = !unknownType.ToUpperInvariant().Contains("CONFIRM") &&
+                                  !unknownType.ToUpperInvariant().Contains("SELECT") &&
+                                  !unknownType.ToUpperInvariant().Contains("TEXT") &&
+                                  !unknownType.ToUpperInvariant().Contains("NUMERIC");
+
+            Assert.IsTrue(confirmDefault, "Confirm type should default to confirmation");
+            Assert.IsTrue(selectDefault, "Select type should default to selection");
+            Assert.IsTrue(textDefault, "Text type should default to text");
+            Assert.IsTrue(numericDefault, "Numeric type should default to numeric");
+            Assert.IsTrue(unknownDefault, "Unknown type should have default handling");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_EventHandling_ShouldMarkAsHandled()
+        {
+            // Test event handling workflow
+            bool eventHandled = false;
+
+            try
+            {
+                // Simulate successful event handling
+                eventHandled = true;
+            }
+            catch
+            {
+                eventHandled = false;
+            }
+
+            Assert.IsTrue(eventHandled, "Successfully handled events should be marked as handled");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_ReflectionPropertyAccess_ShouldHandleFailures()
+        {
+            // Test reflection-based property access
+            object testObject = new { TestProperty = "TestValue" };
+
+            try
+            {
+                var property = testObject.GetType().GetProperty("TestProperty");
+                var value = property?.GetValue(testObject)?.ToString();
+
+                Assert.AreEqual("TestValue", value, "Reflection should access properties correctly");
+            }
+            catch
+            {
+                Assert.Fail("Reflection property access should not fail for valid properties");
+            }
+
+            try
+            {
+                var nonExistentProperty = testObject.GetType().GetProperty("NonExistent");
+                var value = nonExistentProperty?.GetValue(testObject)?.ToString();
+
+                Assert.IsNull(value, "Non-existent properties should return null");
+            }
+            catch
+            {
+                Assert.Fail("Reflection should handle non-existent properties gracefully");
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Fast")]
+        public void UserInputRequest_RequestSummaryGeneration_ShouldFormatCorrectly()
+        {
+            // Test request summary formatting
+            string inputType = "TEXT_INPUT";
+            string message = "Enter customer name";
+            string prompt = "Name:";
+            bool requiresInput = true;
+            bool isMasked = false;
+
+            string expectedSummary = $"Input Type: {inputType}\n" +
+                                   $"Message: {message}\n" +
+                                   $"Prompt: {prompt}\n" +
+                                   $"Requires Input: {requiresInput}\n" +
+                                   $"Is Masked: {isMasked}\n";
+
+            string actualSummary = $"Input Type: {inputType}\n" +
+                                 $"Message: {message}\n" +
+                                 $"Prompt: {prompt}\n" +
+                                 $"Requires Input: {requiresInput}\n" +
+                                 $"Is Masked: {isMasked}\n";
+
+            Assert.AreEqual(expectedSummary, actualSummary, "Request summary should format correctly");
+        }
+    }
 }

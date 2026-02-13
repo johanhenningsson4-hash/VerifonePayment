@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VerifonePayment.UnitTests",
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B8990370-7107-4D9D-BB50-C351EB0D88E9}"
 	ProjectSection(SolutionItems) = preProject
+		docs\Device.txt = docs\Device.txt
+		docs\DeviceRequests.txt = docs\DeviceRequests.txt
 		Receipt.txt = Receipt.txt
 		Refund.txt = Refund.txt
 		Reports.txt = Reports.txt

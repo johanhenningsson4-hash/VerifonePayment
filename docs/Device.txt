@@ -1,0 +1,86 @@
+Device Management
+Last updated: 26-Sep-2025
+Download as PDF
+Some operations like Reboot, Reset, Shutdown, Test host connection, Changing and Resetting Manager passcodes, and invoking terminal heartbeat are part of DeviceManagement. In PSDK, DeviceManagement Enumeration class provides some of the useful Device Management operations.
+
+DeviceManagementAction performs an action on the payment terminal. Some of the most frequently used diagnostic actions are reboot, shutdown, test host connection, check for terminal heartbeat, change password, and reset password. Note that the diagnostic actions to test host connection, check for terminal heartbeat, change password and reset password are applicable only for AGPA solutions.
+
+DeviceManagementAction.REBOOT - The diagnostic action Reboot up on calling reboots the payment terminal.
+DeviceManagementAction.SHUTDOWN - The diagnostic action Shutdown up on calling shutdowns the payment terminal.
+DeviceManagementAction.TEST_HOST_CONNECTION - The diagnostic action Host Connection Test is used to test whether the live host is reachable or not.
+DeviceManagementAction.TMS_MANUAL_HEARTBEAT - Request payment application to trigger a manual VHQ heartbeat.
+DeviceManagementAction.VF_CHANGE_PASSWORD - Request payment application to start change (manager) password flow.
+DeviceManagementAction.VF_RESET_PASSWORD - Request payment application to start reset (manager) password flow.
+Accessibility-specific device management actions are discussed under separate section below. Below API shows how to perform device management actions.
+
+Handle the result of the API call in the CommerceListenerAdapter callback method handleDeviceManagementEvent. The handle DeviceManagementEvent is received when a specific DeviceManagementAction has been processed on the payment terminal.
+
+@Override
+public void handleDeviceManagementEvent(DeviceManagementEvent deviceManagementEvent) {
+  switch(event.getActionType())
+  {
+      case REBOOT:
+          // reboot terminal
+          break;
+
+      case SHUTDOWN:
+          // Shutdown the terminal
+          break;
+
+      // Do Validation of the host connection
+      case TEST_HOST_CONNECTION:
+          if(event.getStatus() == StatusCode.SUCCESS)
+          {
+              // Host connection success
+          } else {
+              // Host connection failed
+          }
+          break;
+
+      // Check for manual heartbeat
+      case TMS_MANUAL_HEARTBEAT:
+          if(event.getStatus() == StatusCode.SUCCESS)
+          {
+              // TMS Heart beat request success ;
+          } else {
+              // TMS Heart beat request Error ;
+          }
+          break;
+
+      // Do Validation for password change
+      case VF_CHANGE_PASSWORD:
+          if(event.getStatus() == StatusCode.SUCCESS) {
+              //DeviceManagement, VF_CHANGE_PASSWORD success;
+          } else {
+              //DeviceManagement, VF_CHANGE_PASSWORD error;
+          }
+          break;
+
+      // Do Validation for password reset
+      case VF_RESET_PASSWORD:
+          if(event.getStatus() == StatusCode.SUCCESS) {
+              //DeviceManagement, VF_RESET_PASSWORD success;
+          } else {
+              //DeviceManagement, VF_RESET_PASSWORD Error;
+          }
+          break;
+  } // End switch
+}
+Password change and reset password requires userinput request from terminal to be handled in POS application.Please refer psdk-device-functions code labs for handling password prompts in your pos application. Configuration parameters like TransactionManager.PASSWORD_AT_POS_CAPABILITY and TransactionManager.INPUT_CONFIRMATION_CAPABILITY should be enabled to handle password inputs(required for change and reset password) at the POS side during login request.
+
+Configuring Accessiblity mode
+AGPA allows to enable Navigator features to enhance accessiblity for visually impared or blind customers. These modes are enabled via TransactionManager.performDeviceManagementCommand method, see example below:
+
+Map<String, String> assistant_params = new HashMap<>();
+map.put(TranasctionManager.VF_ASSISTANT_FOREGROUND_COLOR, "FFFFFF");
+map.put(TransactionManager.VF_ASSISTANT_BACKGROUND_COLOR, "000000");
+DeviceManagementCommand accessisbility_enable = new DeviceManagementCommand(DeviceManagementAction.NAVIGATOR_ENABLE_ASSISTANT, assistnat_params);
+Status status =  paymentSdk.getTransactionManager().performDeviceManagementCommand(accessisbility_enable);
+PSDK supports 3 navigator device management commands:
+
+DeviceManagementAction.NAVIGATOR_ENABLE_ACCESSIBILITY // Designed for users who are blind or have severe visual impairments
+DeviceManagementAction.NAVIGATOR_ENABLE_ASSISTANT // Tailored for users with partial vision or color blindness.
+DeviceManagementAction.NAVIGATOR_DISABLE // Disable special-needs mode
+DeviceManagementAction.NAVIGATOR_ENABLE_ASSISTANT supports parameters to set background and foreground color passed in using HEX RGB notation (see example) All of these modes should be enabled via performDeviceManagementCommand API
+
+Accessiblity mode can also be enabled by customer themselves on the termianl. When this happens PSDK will receive a notification event of type NAVIGATOR_SETTING

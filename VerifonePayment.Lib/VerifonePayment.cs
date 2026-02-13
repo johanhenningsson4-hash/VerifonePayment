@@ -171,6 +171,15 @@ namespace VerifonePayment.Lib
             remove { listener_.ReceiptDeliveryMethodEventOccurred -= value; }
         }
 
+        /// <summary>
+        /// User input request occurred - requires cashier interaction.
+        /// </summary>
+        public event EventHandler<Models.UserInputRequestEventArgs> UserInputRequestOccurred
+        {
+            add { listener_.UserInputRequestOccurred += value; }
+            remove { listener_.UserInputRequestOccurred -= value; }
+        }
+
         #endregion
 
         #region "Properties"
@@ -948,6 +957,135 @@ namespace VerifonePayment.Lib
             string summary = isValid ? "Receipt is valid" : $"Receipt has {issues.Count} issues";
 
             return new Models.ReceiptValidationResult(isValid, summary, issues, warnings);
+        }
+
+        #endregion
+
+        #region "User Input Handling Methods"
+
+        /// <summary>
+        /// Sends a user input response back to the payment application.
+        /// This should be called after collecting the required input from the cashier.
+        /// </summary>
+        /// <param name="request">The user input request containing the response</param>
+        /// <returns>True if the response was sent successfully</returns>
+        public bool SendUserInputResponse(Models.UserInputRequest request)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            if (request.Response == null)
+                throw new InvalidOperationException("User input request does not contain a valid response object");
+
+            try
+            {
+                // Send the response back to the payment application
+                payment_sdk_.TransactionManager.SendInputResponse(request.Response);
+
+                System.Diagnostics.Debug.WriteLine($"Sent user input response for {request.InputType}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error sending user input response: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Handles a user input request with a text response.
+        /// Convenience method that sets the text response and sends it back.
+        /// </summary>
+        /// <param name="request">The user input request</param>
+        /// <param name="textResponse">The text response from the user</param>
+        /// <returns>True if the response was sent successfully</returns>
+        public bool RespondToUserInput(Models.UserInputRequest request, string textResponse)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            try
+            {
+                request.SetTextResponse(textResponse);
+                return SendUserInputResponse(request);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error responding to user input with text: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Handles a user input request with a numeric response.
+        /// Convenience method that sets the numeric response and sends it back.
+        /// </summary>
+        /// <param name="request">The user input request</param>
+        /// <param name="numericResponse">The numeric response from the user</param>
+        /// <returns>True if the response was sent successfully</returns>
+        public bool RespondToUserInput(Models.UserInputRequest request, decimal numericResponse)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            try
+            {
+                request.SetNumericResponse(numericResponse);
+                return SendUserInputResponse(request);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error responding to user input with numeric value: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Handles a user input request with a selection response.
+        /// Convenience method that sets the selection response and sends it back.
+        /// </summary>
+        /// <param name="request">The user input request</param>
+        /// <param name="selectedIndex">The index of the selected option</param>
+        /// <returns>True if the response was sent successfully</returns>
+        public bool RespondToUserInput(Models.UserInputRequest request, int selectedIndex)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            try
+            {
+                request.SetSelectionResponse(selectedIndex);
+                return SendUserInputResponse(request);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error responding to user input with selection: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Handles a user input request with a confirmation response.
+        /// Convenience method that sets the confirmation response and sends it back.
+        /// </summary>
+        /// <param name="request">The user input request</param>
+        /// <param name="confirmed">True if user confirmed, false if cancelled</param>
+        /// <returns>True if the response was sent successfully</returns>
+        public bool RespondToUserInput(Models.UserInputRequest request, bool confirmed)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            try
+            {
+                request.SetConfirmationResponse(confirmed);
+                return SendUserInputResponse(request);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error responding to user input with confirmation: {ex.Message}");
+                return false;
+            }
         }
 
         #endregion
